@@ -196,5 +196,7 @@ function unrecognizedReply(product: string, zh: boolean): string {
 // through /api/files (see app/utils/attachment.ts).
 function appendImages(content: string, images: string[]): string {
   if (images.length === 0) return content
-  return `${content}\n\n${images.map(k => `![](attachment:${k})`).join('\n')}`
+  return `${content}\n\n${images.map(k => k.toLowerCase().endsWith('.mp4')
+    ? `<video controls preload="metadata" src="attachment:${k}"></video>`
+    : `![](attachment:${k})`).join('\n')}`
 }

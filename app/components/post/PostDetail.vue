@@ -386,6 +386,7 @@ async function handleShare() {
                 <Input v-model="editTitle" class="h-10 text-lg font-heading font-bold" :placeholder="$t('post.detail.titlePlaceholder')" :maxlength="200" />
                 <div class="editor-preview-styled">
                   <ThemedMdEditor v-model="editContent" language="en-US" :placeholder="$t('post.detail.editPlaceholder')" :preview="false" :max-length="10000" :toolbars="['bold', 'italic', 'strikeThrough', '-', 'title', 'unorderedList', 'orderedList', '-', 'link', 'image', 'code', 'codeRow', '-', 'previewOnly']" :sanitize="sanitizeAttachmentHtml" :style="{ height: '280px' }" @on-upload-img="onUploadImg" />
+                  <div class="mt-2"><MediaUploadButton v-model:content="editContent" /></div>
                 </div>
                 <p v-if="editError" class="text-sm text-destructive">{{ editError }}</p>
                 <div class="flex items-center gap-3 justify-end">

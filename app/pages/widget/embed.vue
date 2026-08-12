@@ -96,8 +96,9 @@ watch(draft, () => {
 // endpoint wants, and uploading early lets a failure surface while the visitor
 // is still composing.
 // Mirrors `ensure.maxSize` in server/api/upload.post.ts.
-const MAX_UPLOAD_MB = 10
-interface Attachment { key: string; name: string }
+const IMAGE_MAX_BYTES = 20 * 1024 * 1024
+const VIDEO_MAX_BYTES = 100 * 1024 * 1024
+interface Attachment { key: string; name: string; type?: 'image' | 'video' }
 const attachments = ref<Attachment[]>([])
 const pendingUploads = ref(0)
 const uploading = computed(() => pendingUploads.value > 0)
@@ -121,18 +122,29 @@ function onPaste(e: ClipboardEvent) {
 
 async function uploadFiles(files: File[]) {
   if (!files.length) return
+  const file = files[0]!
   uploadError.value = ''
   pendingUploads.value++
-  for (const file of files) {
-    if (file.size > MAX_UPLOAD_MB * 1024 * 1024) {
-      uploadError.value = t('widget.uploadTooLarge', { size: MAX_UPLOAD_MB })
-      continue
+  {
+    const isImage = file.type === 'image/png' || file.type === 'image/jpeg'
+    const isVideo = file.type === 'video/mp4'
+    if (!isImage && !isVideo) {
+      uploadError.value = t('media.videoHint')
+      pendingUploads.value--
+      return
+    }
+    if ((isImage && file.size > IMAGE_MAX_BYTES) || (isVideo && file.size > VIDEO_MAX_BYTES)) {
+      uploadError.value = isImage
+        ? t('widget.uploadTooLarge', { size: 20 })
+        : t('widget.uploadTooLarge', { size: 100 })
+      pendingUploads.value--
+      return
     }
     try {
       const form = new FormData()
       form.append('file', file)
-      const res = await widgetFetch<{ key: string }>('/api/upload', { method: 'POST', body: form })
-      attachments.value.push({ key: res.key, name: file.name })
+      const res = await widgetFetch<{ key: string; type: 'image' | 'video' }>('/api/upload', { method: 'POST', body: form })
+      attachments.value.push({ key: res.key, name: file.name, type: res.type })
     }
     catch (err) {
       // Same 401 contract as send(): park before the SDK rebuilds the frame.
@@ -140,7 +152,7 @@ async function uploadFiles(files: File[]) {
         parkForResume(draft.value, attachments.value, messages.value)
         status.value = 'anonymous'
         protocol.requestAuth('expired')
-        break
+        return
       }
       uploadError.value = t('widget.uploadFailed')
     }
@@ -546,7 +558,8 @@ onUnmounted(() => {
             :key="a.key"
             class="relative h-12 w-16 rounded-md overflow-hidden border border-border group"
           >
-            <img :src="resolveAttachmentUrl(a.key)!" :alt="a.name" class="w-full h-full object-cover">
+            <video v-if="a.type === 'video' || a.key.endsWith('.mp4')" :src="resolveAttachmentUrl(a.key)!" class="w-full h-full object-cover" muted />
+            <img v-else :src="resolveAttachmentUrl(a.key)!" :alt="a.name" class="w-full h-full object-cover">
             <button
               class="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white"
               :aria-label="t('widget.cancel')"
@@ -566,8 +579,7 @@ onUnmounted(() => {
           <input
             ref="fileInput"
             type="file"
-            accept="image/*"
-            multiple
+            accept="image/png,image/jpeg,.png,.jpg,.jpeg,video/mp4,.mp4"
             class="hidden"
             @change="onFilePicked"
           >

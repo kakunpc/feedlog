@@ -32,7 +32,9 @@ function encodeKey(key: string): string {
  * e.g. ![alt](attachment:uploads/img.png) → ![alt](/api/files/uploads/img.png)
  */
 export function resolveAttachmentUrls(markdown: string): string {
-  return markdown.replace(ATTACHMENT_MD_RE, (_m, pre, key, post) => `${pre}/api/files/${encodeKey(key)}${post}`)
+  return markdown
+    .replace(ATTACHMENT_MD_RE, (_m, pre, key, post) => `${pre}/api/files/${encodeKey(key)}${post}`)
+    .replace(ATTACHMENT_HTML_RE, (_m, pre, key, post) => `${pre}/api/files/${encodeKey(key)}${post}`)
 }
 
 /**

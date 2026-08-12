@@ -127,6 +127,10 @@ defineExpose({ clear })
       </template>
     </ThemedMdEditor>
 
+    <div class="px-3 pt-2">
+      <MediaUploadButton v-model:content="content" />
+    </div>
+
     <p v-if="error" class="px-4 py-2 text-sm text-destructive">{{ error }}</p>
   </div>
 </template>

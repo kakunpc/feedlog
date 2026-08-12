@@ -31,6 +31,11 @@
     "done": "已完成",
     "cancelled": "已取消"
   },
+  "media": {
+    "addVideo": "添加视频",
+    "uploading": "上传中...",
+    "videoHint": "单个MP4最大100MB。图片限单个PNG/JPG，最大20MB。"
+  },
   "time": {
     "justNow": "刚刚",
     "minutesAgo": "{n} 分钟前",

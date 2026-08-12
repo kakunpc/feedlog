@@ -210,7 +210,7 @@ watch(open, (v) => {
         <div class="flex flex-col h-[420px] min-h-[200px] gap-2">
           <!-- Markdown editor: flex-1 shrinks when hint expands -->
           <ClientOnly>
-            <div class="editor-preview-styled flex-1 min-h-[120px] transition-all duration-300">
+            <div class="editor-preview-styled relative flex-1 min-h-[120px] transition-all duration-300">
               <ThemedMdEditor
                 v-model="content"
                 :language="locale === 'ja' ? 'ja-JP' : locale === 'zh' ? 'zh-CN' : 'en-US'"
@@ -222,6 +222,9 @@ watch(open, (v) => {
                 style="height: 100%"
                 @on-upload-img="onUploadImg"
               />
+              <div class="absolute bottom-3 left-3 z-10">
+                <MediaUploadButton v-model:content="content" />
+              </div>
             </div>
           </ClientOnly>
 

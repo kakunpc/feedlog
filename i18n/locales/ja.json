@@ -31,6 +31,11 @@
     "done": "完了",
     "cancelled": "中止"
   },
+  "media": {
+    "addVideo": "動画を追加",
+    "uploading": "アップロード中...",
+    "videoHint": "MP4・1ファイル・100MBまで。画像はPNG/JPG・1ファイル・20MBまで。"
+  },
   "time": {
     "justNow": "たった今",
     "minutesAgo": "{n}分前",
