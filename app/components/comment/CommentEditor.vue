@@ -20,7 +20,9 @@ const emit = defineEmits<{
 
 const content = ref(props.initialContent ?? '')
 const error = ref('')
-const notify = ref(true)
+// Emailing upvoters is an explicit opt-in. Posting an official comment should
+// not notify the wider voter list unless the manager turns this on.
+const notify = ref(false)
 
 const isReply = computed(() => !!props.parentId)
 const isEditing = computed(() => !!props.initialContent)
@@ -41,7 +43,7 @@ function handleSubmit() {
 function clear() {
   content.value = ''
   error.value = ''
-  notify.value = true
+  notify.value = false
 }
 
 defineExpose({ clear })

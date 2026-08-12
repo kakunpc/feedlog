@@ -28,7 +28,8 @@
     "open": "Open",
     "planned": "Planned",
     "in_progress": "In Progress",
-    "done": "Completed"
+    "done": "Completed",
+    "cancelled": "Cancelled"
   },
   "time": {
     "justNow": "just now",

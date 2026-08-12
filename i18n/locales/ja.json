@@ -28,7 +28,8 @@
     "open": "受付中",
     "planned": "予定",
     "in_progress": "進行中",
-    "done": "完了"
+    "done": "完了",
+    "cancelled": "中止"
   },
   "time": {
     "justNow": "たった今",

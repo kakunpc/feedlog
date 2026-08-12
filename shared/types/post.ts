@@ -1,5 +1,5 @@
 // Post status enum
-export const POST_STATUSES = ['open', 'planned', 'in_progress', 'done'] as const
+export const POST_STATUSES = ['open', 'planned', 'in_progress', 'done', 'cancelled'] as const
 export type PostStatus = typeof POST_STATUSES[number]
 
 // Roadmap only shows these three statuses (excludes 'open')
@@ -20,6 +20,7 @@ export const STATUS_CONFIG: Record<PostStatus, StatusConfig> = {
   planned: { label: 'Planned', color: '#3b82f6', cssVar: '--status-planned' },
   in_progress: { label: 'In Progress', color: '#f59e0b', cssVar: '--status-in-progress' },
   done: { label: 'Completed', color: '#22c55e', cssVar: '--status-done' },
+  cancelled: { label: 'Cancelled', color: '#ef4444', cssVar: '--status-cancelled' },
 }
 
 /** Status options as array (useful for dropdowns / selectors) */
