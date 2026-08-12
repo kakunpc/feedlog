@@ -59,6 +59,8 @@
     "recentRequests": "Recent Requests",
     "sortTop": "Top",
     "sortRecent": "Recent",
+    "showClosed": "Show completed & cancelled",
+    "hideClosed": "Hide completed & cancelled",
     "search": "Search",
     "searchPlaceholder": "Search feedback…",
     "clearSearch": "Clear search",

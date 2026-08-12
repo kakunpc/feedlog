@@ -1,4 +1,4 @@
-import { eq, and, desc, asc, sql, inArray, isNull } from 'drizzle-orm'
+import { eq, and, desc, asc, sql, inArray, isNull, notInArray } from 'drizzle-orm'
 import { post, user, vote } from '#layers/feedlog/server/db/schemas'
 
 // GET /api/posts — Public post list (cursor pagination)
@@ -8,6 +8,7 @@ export default defineEventHandler(async (event): Promise<CursorPaginatedList<Pos
 
   const boardId = query.boardId as string | undefined
   const status = query.status as string | undefined
+  const includeClosed = String(query.includeClosed) === 'true'
   const sort = (query.sort as string) || 'createdAt'
   const order = (query.order as string) || 'desc'
   const cursor = query.cursor as string | undefined
@@ -20,6 +21,7 @@ export default defineEventHandler(async (event): Promise<CursorPaginatedList<Pos
   const conditions: any[] = [eq(post.orgId, orgId), isNull(post.mergedTo)]
   if (boardId) conditions.push(eq(post.boardId, boardId))
   if (status) conditions.push(eq(post.status, status))
+  else if (!includeClosed) conditions.push(notInArray(post.status, ['done', 'cancelled']))
 
   // Cursor conditions
   if (cursor) {

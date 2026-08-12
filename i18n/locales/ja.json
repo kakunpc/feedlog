@@ -59,6 +59,8 @@
     "recentRequests": "最近のリクエスト",
     "sortTop": "人気順",
     "sortRecent": "新着順",
+    "showClosed": "完了・中止を表示",
+    "hideClosed": "完了・中止を隠す",
     "search": "検索",
     "searchPlaceholder": "フィードバックを検索…",
     "clearSearch": "検索をクリア",

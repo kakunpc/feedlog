@@ -2,6 +2,7 @@
 import { useMediaQuery } from '@vueuse/core'
 const q = defineModel<string>({ default: '' })
 const sortBy = defineModel<'top' | 'recent'>('sort', { default: 'recent' })
+const includeClosed = defineModel<boolean>('includeClosed', { default: false })
 const emit = defineEmits<{ 'new-request': [] }>()
 
 const searchOpen = ref(false)
@@ -118,6 +119,17 @@ defineExpose({ reset })
               {{ $t('board.sortRecent') }}
             </button>
           </div>
+          <button
+            type="button"
+            class="fl-toolbtn px-3"
+            :class="includeClosed ? 'border-primary text-primary bg-primary/5' : ''"
+            :aria-pressed="includeClosed"
+            :title="includeClosed ? $t('board.hideClosed') : $t('board.showClosed')"
+            @click="includeClosed = !includeClosed"
+          >
+            <Icon name="lucide:filter" size="18" />
+            <span class="hidden lg:inline">{{ includeClosed ? $t('board.hideClosed') : $t('board.showClosed') }}</span>
+          </button>
           <button
             ref="searchTrigger"
             type="button"

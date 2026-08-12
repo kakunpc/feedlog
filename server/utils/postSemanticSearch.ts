@@ -1,10 +1,11 @@
-import { and, eq, isNull, isNotNull, sql } from 'drizzle-orm'
+import { and, eq, isNull, isNotNull, notInArray, sql } from 'drizzle-orm'
 import { post, postEmbedding, user } from '#layers/feedlog/server/db/schemas'
 
 export interface SemanticOpts {
   orgId: string
   boardId?: string
   status?: string
+  excludeStatuses?: string[]
   merged?: 'canonical_only' | 'merged_only' | 'all'
   maxDistance?: number // cosine-distance cutoff (public threshold); omit = no cutoff
   limit: number
@@ -24,6 +25,7 @@ export async function searchPostsBySemantic(embedding: number[], opts: SemanticO
   else conditions.push(isNull(post.mergedTo)) // default + canonical_only
   if (opts.boardId) conditions.push(eq(post.boardId, opts.boardId))
   if (opts.status) conditions.push(eq(post.status, opts.status))
+  else if (opts.excludeStatuses?.length) conditions.push(notInArray(post.status, opts.excludeStatuses))
   if (opts.maxDistance != null) conditions.push(sql`${distance} <= ${opts.maxDistance}`)
 
   return db

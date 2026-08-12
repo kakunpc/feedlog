@@ -1,4 +1,4 @@
-import { eq, and, isNull, inArray, sql } from 'drizzle-orm'
+import { eq, and, isNull, inArray, notInArray, sql } from 'drizzle-orm'
 import { post, postSearch, user, vote } from '#layers/feedlog/server/db/schemas'
 
 // GET /api/posts/search?q=&limit= — Public semantic search over an org's feedback.
@@ -18,6 +18,7 @@ export default defineEventHandler(async (event) => {
   const orgId = event.context.orgId!
 
   const q = ((query.q as string | undefined) ?? '').trim()
+  const includeClosed = String(query.includeClosed) === 'true'
   if (!q) return { data: [] as PostListItem[] }
 
   const db = useDB()
@@ -31,6 +32,7 @@ export default defineEventHandler(async (event) => {
     rows = await searchPostsBySemantic(embedding, {
       orgId,
       merged: 'canonical_only',
+      excludeStatuses: includeClosed ? undefined : ['done', 'cancelled'],
       limit: PUBLIC_SEARCH_LIMIT,
     })
   }
@@ -57,7 +59,11 @@ export default defineEventHandler(async (event) => {
       .from(post)
       .innerJoin(postSearch, eq(post.id, postSearch.postId))
       .leftJoin(user, eq(post.authorId, user.id))
-      .where(and(eq(post.orgId, orgId), isNull(post.mergedTo)))
+      .where(and(
+        eq(post.orgId, orgId),
+        isNull(post.mergedTo),
+        ...(includeClosed ? [] : [notInArray(post.status, ['done', 'cancelled'])]),
+      ))
       .orderBy(sql`${postSearch.searchText} <-> ${q}`)
       .limit(PUBLIC_SEARCH_LIMIT)
   }

@@ -37,6 +37,7 @@ const activeBoardId = computed(() => {
   return boards.value.find(b => b.name.toLowerCase() === wanted)?.id ?? null
 })
 const sortBy = ref<'top' | 'recent'>('recent')
+const includeClosed = ref(false)
 
 // Post list
 const sort = computed(() => sortBy.value === 'top' ? 'votes' : 'createdAt')
@@ -56,6 +57,7 @@ async function fetchPosts(cursor?: string) {
       sort: sort.value,
       pageSize: 10,
       cursor,
+      includeClosed: includeClosed.value || undefined,
     },
   })
   return data
@@ -99,6 +101,25 @@ watch(sort, async () => {
   }
 })
 
+watch(includeClosed, async () => {
+  if (searchActive.value) {
+    const q = searchQuery.value.trim()
+    searching.value = true
+    try {
+      const res = await useApiFetch<{ data: PostListItem[] }>('/api/posts/search', {
+        query: { q, includeClosed: includeClosed.value || undefined },
+      })
+      posts.value = res.data
+      nextCursor.value = null
+    } finally {
+      searching.value = false
+    }
+    return
+  }
+  fetchingPosts.value = true
+  try { await refreshPosts() } finally { fetchingPosts.value = false }
+})
+
 async function refreshPosts() {
   const data = await fetchPosts()
   posts.value = data.data
@@ -114,7 +135,9 @@ watch(searchQuery, async () => {
   }
   searching.value = true
   try {
-    const res = await useApiFetch<{ data: PostListItem[] }>('/api/posts/search', { query: { q } })
+    const res = await useApiFetch<{ data: PostListItem[] }>('/api/posts/search', {
+      query: { q, includeClosed: includeClosed.value || undefined },
+    })
     posts.value = res.data
     nextCursor.value = null // search returns a flat capped set — no "load more"
   } finally {
@@ -211,6 +234,10 @@ function onPostUpdated(updated: { id: string; status?: string; boardId?: string 
 
   // If status or board changed and no longer matches current filter, remove
   if (updated.boardId !== undefined && activeBoardId.value && updated.boardId !== activeBoardId.value) {
+    posts.value.splice(idx, 1)
+    return
+  }
+  if (updated.status && !includeClosed.value && ['done', 'cancelled'].includes(updated.status)) {
     posts.value.splice(idx, 1)
     return
   }
@@ -360,6 +387,7 @@ async function handleVote(post: PostListItem) {
       ref="searchToolbar"
       v-model="searchQuery"
       v-model:sort="sortBy"
+      v-model:include-closed="includeClosed"
       @new-request="isLoggedIn ? (showSubmit = true) : loginModal.open()"
     />
 
