@@ -69,9 +69,9 @@ defineExpose({ reset })
 </script>
 
 <template>
-  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2">
+  <div class="flex flex-col sm:flex-row sm:flex-wrap sm:items-center justify-between gap-4 pb-2">
     <Transition name="fl-left" mode="out-in" @after-enter="onSearchRevealed">
-      <h2 v-if="!searchOpenDesktop" class="font-heading text-2xl font-bold">
+      <h2 v-if="!searchOpenDesktop" class="shrink-0 whitespace-nowrap font-heading text-2xl font-bold">
         {{ sortBy === 'top' ? $t('board.topRequests') : $t('board.recentRequests') }}
       </h2>
       <div v-else class="fl-search">
@@ -96,12 +96,12 @@ defineExpose({ reset })
       </div>
     </Transition>
 
-    <div ref="controlsRow" class="fl-rightbar flex items-center relative">
+    <div ref="controlsRow" class="fl-rightbar ml-auto flex items-center relative">
       <Transition name="fl-controls">
-        <div v-if="!searchOpen" class="flex items-center gap-3">
-          <div class="flex bg-border/50 p-1 rounded-lg">
+        <div v-if="!searchOpen" class="flex shrink-0 items-center gap-3">
+          <div class="flex shrink-0 bg-border/50 p-1 rounded-lg">
             <button
-              class="px-4 py-1.5 rounded-[12px] text-sm font-medium transition-colors"
+              class="whitespace-nowrap px-4 py-1.5 rounded-[12px] text-sm font-medium transition-colors"
               :class="sortBy === 'top'
                 ? 'bg-card text-foreground shadow-sm'
                 : 'text-muted-foreground hover:text-foreground'"
@@ -110,7 +110,7 @@ defineExpose({ reset })
               {{ $t('board.sortTop') }}
             </button>
             <button
-              class="px-4 py-1.5 rounded-[12px] text-sm font-medium transition-colors"
+              class="whitespace-nowrap px-4 py-1.5 rounded-[12px] text-sm font-medium transition-colors"
               :class="sortBy === 'recent'
                 ? 'bg-card text-foreground shadow-sm'
                 : 'text-muted-foreground hover:text-foreground'"
@@ -145,7 +145,7 @@ defineExpose({ reset })
       <Transition name="fl-newreq">
         <Button
           v-show="!searchOpenMobile"
-          class="h-10 px-4 rounded-lg text-[15px] font-heading font-semibold"
+          class="h-10 shrink-0 whitespace-nowrap px-4 rounded-lg text-[15px] font-heading font-semibold"
           @click="emit('new-request')"
         >
           <Icon name="lucide:plus" size="18" />
@@ -192,6 +192,7 @@ defineExpose({ reset })
   color: var(--muted-foreground);
   font-size: 14px;
   font-weight: 500;
+  white-space: nowrap;
   transition: border-color 0.15s ease, color 0.15s ease;
 }
 .fl-toolbtn:hover {
@@ -308,10 +309,14 @@ defineExpose({ reset })
 .fl-rightbar {
   gap: 0.75rem;
   position: relative; /* anchors the mobile search overlay; inert on desktop */
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 @media (max-width: 639.98px) {
   .fl-rightbar {
+    width: 100%;
     gap: 0.5rem;
     min-height: 40px;
   }
