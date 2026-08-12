@@ -369,6 +369,7 @@ function formatComment(r: any, adminIds: Set<string>) {
     author: { id: r.authorId, name: r.authorName, image: r.authorImage, isAdmin: adminIds.has(r.authorId) },
     content: r.content,
     type: r.type ?? 'comment',
+    metadata: r.metadata ?? undefined,
     editedAt: r.editedAt,
     createdAt: r.createdAt,
   }

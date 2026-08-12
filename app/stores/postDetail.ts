@@ -348,6 +348,7 @@ export const usePostDetailStore = defineStore('postDetail', () => {
     if (res.content !== undefined) p.content = res.content
     if (res.status) p.status = res.status
     if (res.boardId !== undefined) p.boardId = res.boardId
+    if (res.commentCount !== undefined) p.commentCount = res.commentCount
     if (res.updatedAt) p.updatedAt = res.updatedAt
   }
 

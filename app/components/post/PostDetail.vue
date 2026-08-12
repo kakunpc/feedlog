@@ -136,6 +136,7 @@ async function handleDeletePost() {
 async function handleStatusChange(status: string) {
   if (!post.value || !isOrgManager.value || post.value.status === status) return
   await store.updatePost(props.slug, { status }, true)
+  await store.fetchComments(props.slug, commentSort.value)
   emit('updated', { id: post.value.id, slug: post.value.slug, status })
 }
 

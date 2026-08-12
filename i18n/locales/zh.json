@@ -292,6 +292,7 @@
       "notifyUpvoters": "通知点赞者",
       "notifyUpvotersHint": "额外通知点赞过的人。作者和已订阅的人始终会收到。",
       "emailUpvoters": "邮件通知点赞者",
+      "statusChanged": "从{from}更改为{to}",
       "adminBadge": "管理员"
     },
     "statusNotify": {

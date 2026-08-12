@@ -292,6 +292,7 @@
       "notifyUpvoters": "賛成したユーザーへ通知",
       "notifyUpvotersHint": "賛成したユーザーにもメールを送ります。投稿者と購読者には常に通知されます。",
       "emailUpvoters": "賛成したユーザーへメール",
+      "statusChanged": "{from}から{to}に変更",
       "adminBadge": "管理者"
     },
     "statusNotify": {

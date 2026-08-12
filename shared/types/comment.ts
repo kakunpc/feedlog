@@ -14,7 +14,12 @@ export interface CommentItem {
   hasLiked: boolean
   author: CommentAuthor
   content: string
-  type: 'comment' | 'mergedPost'
+  type: 'comment' | 'mergedPost' | 'statusChange'
+  metadata?: {
+    fromStatus?: string
+    toStatus?: string
+    [key: string]: unknown
+  }
   editedAt: string | null
   createdAt: string
   children?: CommentItem[]

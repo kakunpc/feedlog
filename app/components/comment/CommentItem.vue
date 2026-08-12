@@ -24,6 +24,7 @@ const emit = defineEmits<{
 }>()
 
 const isMergedPost = computed(() => props.comment.type === 'mergedPost')
+const isStatusChange = computed(() => props.comment.type === 'statusChange')
 
 const hasMoreChildren = computed(() => {
   const c = props.comment
@@ -59,6 +60,16 @@ const { confirm } = useConfirmDialog()
 const { t } = useI18n()
 const timeAgo = useTimeAgo()
 
+const statusChangeText = computed(() => {
+  const from = props.comment.metadata?.fromStatus
+  const to = props.comment.metadata?.toStatus
+  if (!from || !to) return props.comment.content
+  return t('post.comment.statusChanged', {
+    from: t(`status.${from}`),
+    to: t(`status.${to}`),
+  })
+})
+
 async function handleDelete() {
   const ok = await confirm({
     title: t('post.comment.deleteTitle'),
@@ -85,6 +96,13 @@ function initials(name: string | null) {
     :is-admin="usePermission(computed(() => ''), 'post').isOrgManager.value"
     @unmerge="$emit('unmerge', $event)"
   />
+
+  <!-- Immutable status history entry -->
+  <div v-else-if="isStatusChange" class="flex items-center gap-3 rounded-lg border border-border bg-secondary/30 px-4 py-3 text-sm">
+    <Icon name="lucide:history" size="16" class="shrink-0 text-muted-foreground" />
+    <span class="font-medium">{{ statusChangeText }}</span>
+    <span class="ml-auto shrink-0 text-xs text-muted-foreground">{{ timeAgo(comment.createdAt) }}</span>
+  </div>
 
   <!-- Regular comment -->
   <div v-else class="relative flex flex-col gap-4">

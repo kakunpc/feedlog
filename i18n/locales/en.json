@@ -292,6 +292,7 @@
       "notifyUpvoters": "Notify upvoters",
       "notifyUpvotersHint": "Also email upvoters. The author and subscribers always get it.",
       "emailUpvoters": "Email upvoters",
+      "statusChanged": "Changed from {from} to {to}",
       "adminBadge": "Admin"
     },
     "statusNotify": {

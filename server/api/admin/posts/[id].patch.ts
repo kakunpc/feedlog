@@ -1,5 +1,5 @@
-import { and, eq } from 'drizzle-orm'
-import { post, postSearch } from '#layers/feedlog/server/db/schemas'
+import { and, eq, sql } from 'drizzle-orm'
+import { comment, post, postSearch } from '#layers/feedlog/server/db/schemas'
 import { updatePostSchema } from '#layers/feedlog/shared/schemas/post'
 
 // PATCH /api/admin/posts/:id — Moderator-style update (status / board / title / content).
@@ -40,16 +40,37 @@ export default defineEventHandler(async (event) => {
   const newTitle = (updates.title as string) ?? existing.title
   const newContent = (updates.content as string) ?? existing.content
   const contentChanged = newTitle !== existing.title || newContent !== existing.content
+  const statusChanged = body.status !== undefined && body.status !== existing.status
 
   if (contentChanged) {
     updates.contentHash = computeContentHash(newTitle, newContent)
   }
+  if (statusChanged) {
+    updates.commentCount = sql`${post.commentCount} + 1`
+  }
 
-  const [updated] = await db
-    .update(post)
-    .set(updates)
-    .where(and(eq(post.id, id), eq(post.orgId, orgId)))
-    .returning()
+  const updated = await db.transaction(async (tx) => {
+    const [row] = await tx
+      .update(post)
+      .set(updates)
+      .where(and(eq(post.id, id), eq(post.orgId, orgId)))
+      .returning()
+
+    if (statusChanged) {
+      await tx.insert(comment).values({
+        postId: id,
+        authorId: session.user.id,
+        type: 'statusChange',
+        content: `${existing.status}から${body.status}に変更`,
+        metadata: {
+          fromStatus: existing.status,
+          toStatus: body.status,
+        },
+      })
+    }
+
+    return row
+  })
 
   // Update search text and trigger embedding if content changed
   if (contentChanged) {
