@@ -1,5 +1,8 @@
 import { eq, and, sql } from 'drizzle-orm'
+import { alias } from 'drizzle-orm/pg-core'
 import { post, user, vote } from '#layers/feedlog/server/db/schemas'
+
+const assigneeUser = alias(user, 'assignee_user')
 
 // GET /api/posts/:slug — Get post detail
 export default defineEventHandler(async (event): Promise<PostDetail> => {
@@ -17,6 +20,9 @@ export default defineEventHandler(async (event): Promise<PostDetail> => {
       content: post.content,
       status: post.status,
       boardId: post.boardId,
+      assigneeId: post.assigneeId,
+      assigneeName: assigneeUser.name,
+      assigneeImage: assigneeUser.image,
       voteCount: post.voteCount,
       commentCount: post.commentCount,
       mergedTo: post.mergedTo,
@@ -29,6 +35,7 @@ export default defineEventHandler(async (event): Promise<PostDetail> => {
     })
     .from(post)
     .leftJoin(user, eq(post.authorId, user.id))
+    .leftJoin(assigneeUser, eq(post.assigneeId, assigneeUser.id))
     .where(and(eq(post.slug, slug), eq(post.orgId, orgId)))
     .limit(1)
 
@@ -97,6 +104,10 @@ export default defineEventHandler(async (event): Promise<PostDetail> => {
     content: row.content,
     status: row.status,
     boardId: row.boardId,
+    assigneeId: row.assigneeId,
+    assignee: row.assigneeId
+      ? { id: row.assigneeId, name: row.assigneeName, image: row.assigneeImage }
+      : null,
     voteCount: row.voteCount,
     commentCount: row.commentCount,
     mergedTo: row.mergedTo,

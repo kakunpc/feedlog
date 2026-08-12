@@ -71,6 +71,13 @@
       "when": 1786492800000,
       "tag": "0009_access_invites",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1786496400000,
+      "tag": "0010_post_assignee",
+      "breakpoints": true
     }
   ]
 }

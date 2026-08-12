@@ -66,6 +66,7 @@ export const post = pgTable('post', {
   orgId: text('org_id').notNull(),
   boardId: uuid('board_id'),
   authorId: text('author_id').notNull(),
+  assigneeId: text('assignee_id').references(() => user.id, { onDelete: 'set null' }),
   slug: varchar({ length: 300 }).notNull(),
   status: varchar({ length: 20 }).notNull().default('open'),
   title: varchar({ length: 200 }).notNull(),
@@ -94,6 +95,7 @@ export const post = pgTable('post', {
   // (org_id, <something-else>), so an author filter would otherwise scan the
   // org's whole post table.
   index('idx_post_org_author_created').on(t.orgId, t.authorId, sql`${t.createdAt} DESC`),
+  index('idx_post_assignee').on(t.assigneeId),
   // Per-org slug uniqueness
   uniqueIndex('idx_post_org_slug').on(t.orgId, t.slug),
   // Partial index on merged_to for merged posts lookup
@@ -223,6 +225,7 @@ export const postRelations = relations(post, ({ one, many }) => ({
   organization: one(organization, { fields: [post.orgId], references: [organization.id] }),
   board: one(board, { fields: [post.boardId], references: [board.id] }),
   author: one(user, { fields: [post.authorId], references: [user.id] }),
+  assignee: one(user, { fields: [post.assigneeId], references: [user.id], relationName: 'postAssignee' }),
   canonical: one(post, { fields: [post.mergedTo], references: [post.id], relationName: 'mergedPosts' }),
   mergedPosts: many(post, { relationName: 'mergedPosts' }),
   comments: many(comment),

@@ -12,6 +12,7 @@ export interface PostUpdatedEvent {
   excerpt?: string
   status?: string
   boardId?: string | null
+  assigneeId?: string | null
   commentCount?: number
   voteCount?: number
   hasVoted?: boolean
@@ -50,6 +51,20 @@ const loginModal = useLoginModal()
 // Permissions
 const postAuthorId = computed(() => post.value?.author?.id)
 const { canEdit: canEditPost, canDelete: canDeletePost, isOrgManager, showMenu: showPostMenu } = usePermission(postAuthorId, 'post')
+
+interface AssigneeOption {
+  id: string
+  name: string | null
+  image: string | null
+  role: 'owner' | 'manager' | 'contributor'
+}
+
+const assignees = ref<AssigneeOption[]>([])
+
+watch(isOrgManager, async (allowed) => {
+  if (!allowed || assignees.value.length > 0) return
+  assignees.value = await useApiFetch<AssigneeOption[]>('/api/admin/assignees')
+}, { immediate: true })
 
 
 function initials(name: string | null) {
@@ -144,6 +159,16 @@ async function handleBoardChange(boardId: string | null) {
   if (!post.value || !isOrgManager.value) return
   await store.updatePost(props.slug, { boardId }, true)
   emit('updated', { id: post.value.id, slug: post.value.slug, boardId })
+}
+
+async function handleAssigneeChange(assigneeId: string | null) {
+  if (!post.value || !isOrgManager.value || post.value.assigneeId === assigneeId) return
+  await store.updatePost(props.slug, { assigneeId }, true)
+  post.value.assignee = assigneeId
+    ? assignees.value.find(member => member.id === assigneeId) ?? null
+    : null
+  await store.fetchComments(props.slug, commentSort.value)
+  emit('updated', { id: post.value.id, slug: post.value.slug, assigneeId })
 }
 
 // ---- Merge state ----
@@ -490,6 +515,39 @@ async function handleShare() {
           <div v-else class="flex items-center gap-3">
             <div class="w-3 h-3 rounded-full" :style="{ backgroundColor: `var(${(STATUS_CONFIG[post.status as keyof typeof STATUS_CONFIG] ?? STATUS_CONFIG.open).cssVar})` }" />
             <span class="font-bold text-sm">{{ $t(statusLabelKey(post.status)) }}</span>
+          </div>
+        </div>
+        <!-- Assignee: visible to everyone, editable by managers and owners. -->
+        <div v-if="!isMerged">
+          <h4 class="font-heading text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-2">{{ $t('post.detail.assignee') }}</h4>
+          <DropdownMenu v-if="isOrgManager">
+            <DropdownMenuTrigger as-child>
+              <button class="flex items-center gap-3 hover:bg-secondary/50 p-2 -ml-2 rounded-md transition-colors">
+                <img v-if="post.assignee?.image" :src="post.assignee.image" :alt="post.assignee.name" class="h-7 w-7 shrink-0 rounded-full object-cover" referrerpolicy="no-referrer">
+                <div v-else class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-foreground/10 text-[10px] font-bold">
+                  {{ post.assignee ? initials(post.assignee.name) : '—' }}
+                </div>
+                <span class="font-bold text-sm">{{ post.assignee?.name ?? $t('post.detail.none') }}</span>
+                <Icon name="lucide:chevron-down" size="14" class="shrink-0 text-muted-foreground" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" class="min-w-[220px]">
+              <DropdownMenuItem class="text-xs font-medium gap-2" :class="!post.assigneeId ? 'font-bold' : ''" @click="handleAssigneeChange(null)">
+                <span class="w-4 shrink-0 flex items-center justify-center"><Icon v-if="!post.assigneeId" name="lucide:check" size="12" /></span>
+                {{ $t('post.detail.none') }}
+              </DropdownMenuItem>
+              <DropdownMenuItem v-for="member in assignees" :key="member.id" class="text-xs font-medium gap-2" :class="post.assigneeId === member.id ? 'font-bold' : ''" @click="handleAssigneeChange(member.id)">
+                <span class="w-4 shrink-0 flex items-center justify-center"><Icon v-if="post.assigneeId === member.id" name="lucide:check" size="12" /></span>
+                <img v-if="member.image" :src="member.image" :alt="member.name" class="h-6 w-6 shrink-0 rounded-full object-cover" referrerpolicy="no-referrer">
+                <div v-else class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-foreground/10 text-[9px] font-bold">{{ initials(member.name) }}</div>
+                <span>{{ member.name ?? $t('common.anonymous') }}</span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <div v-else class="flex items-center gap-3">
+            <img v-if="post.assignee?.image" :src="post.assignee.image" :alt="post.assignee.name" class="h-7 w-7 shrink-0 rounded-full object-cover" referrerpolicy="no-referrer">
+            <div v-else class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-foreground/10 text-[10px] font-bold">{{ post.assignee ? initials(post.assignee.name) : '—' }}</div>
+            <span class="font-bold text-sm">{{ post.assignee?.name ?? $t('post.detail.none') }}</span>
           </div>
         </div>
         <div>

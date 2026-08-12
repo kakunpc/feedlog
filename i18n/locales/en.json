@@ -236,6 +236,7 @@
       "viewMoreComments": "View more comments",
       "board": "Board",
       "status": "Status",
+      "assignee": "Assignee",
       "author": "Author",
       "copyEmail": "Copy email",
       "emailCopied": "Email copied to clipboard",
@@ -293,6 +294,7 @@
       "notifyUpvotersHint": "Also email upvoters. The author and subscribers always get it.",
       "emailUpvoters": "Email upvoters",
       "statusChanged": "Changed from {from} to {to}",
+      "assigneeChanged": "Changed assignee from {from} to {to}",
       "adminBadge": "Admin"
     },
     "statusNotify": {

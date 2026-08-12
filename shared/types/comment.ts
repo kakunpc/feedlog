@@ -14,10 +14,14 @@ export interface CommentItem {
   hasLiked: boolean
   author: CommentAuthor
   content: string
-  type: 'comment' | 'mergedPost' | 'statusChange'
+  type: 'comment' | 'mergedPost' | 'statusChange' | 'assigneeChange'
   metadata?: {
     fromStatus?: string
     toStatus?: string
+    fromAssigneeId?: string | null
+    fromAssigneeName?: string | null
+    toAssigneeId?: string | null
+    toAssigneeName?: string | null
     [key: string]: unknown
   }
   editedAt: string | null

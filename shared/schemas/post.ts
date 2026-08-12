@@ -12,4 +12,5 @@ export const updatePostSchema = z.object({
   content: z.string().trim().min(1, 'Content is required').max(10000, 'Content must be 10000 characters or less').optional(),
   status: z.enum(['open', 'planned', 'in_progress', 'done', 'cancelled']).optional(),
   boardId: z.uuid().nullable().optional(),
+  assigneeId: z.string().min(1).nullable().optional(),
 })

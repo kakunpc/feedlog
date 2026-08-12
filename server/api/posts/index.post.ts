@@ -31,6 +31,8 @@ export default defineEventHandler(async (event) => {
     content: created.content,
     status: created.status,
     boardId: created.boardId,
+    assigneeId: null,
+    assignee: null,
     voteCount: created.voteCount,
     commentCount: created.commentCount,
     mergedCount: 0,

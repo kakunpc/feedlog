@@ -236,6 +236,7 @@
       "viewMoreComments": "コメントをさらに表示",
       "board": "ボード",
       "status": "ステータス",
+      "assignee": "対応者",
       "author": "投稿者",
       "copyEmail": "メールアドレスをコピー",
       "emailCopied": "メールアドレスをコピーしました",
@@ -293,6 +294,7 @@
       "notifyUpvotersHint": "賛成したユーザーにもメールを送ります。投稿者と購読者には常に通知されます。",
       "emailUpvoters": "賛成したユーザーへメール",
       "statusChanged": "{from}から{to}に変更",
+      "assigneeChanged": "対応者を{from}から{to}に変更",
       "adminBadge": "管理者"
     },
     "statusNotify": {

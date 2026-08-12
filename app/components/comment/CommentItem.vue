@@ -25,6 +25,8 @@ const emit = defineEmits<{
 
 const isMergedPost = computed(() => props.comment.type === 'mergedPost')
 const isStatusChange = computed(() => props.comment.type === 'statusChange')
+const isAssigneeChange = computed(() => props.comment.type === 'assigneeChange')
+const isAuditLog = computed(() => isStatusChange.value || isAssigneeChange.value)
 
 const hasMoreChildren = computed(() => {
   const c = props.comment
@@ -60,14 +62,20 @@ const { confirm } = useConfirmDialog()
 const { t } = useI18n()
 const timeAgo = useTimeAgo()
 
-const statusChangeText = computed(() => {
-  const from = props.comment.metadata?.fromStatus
-  const to = props.comment.metadata?.toStatus
-  if (!from || !to) return props.comment.content
-  return t('post.comment.statusChanged', {
-    from: t(`status.${from}`),
-    to: t(`status.${to}`),
-  })
+const auditLogText = computed(() => {
+  if (isStatusChange.value) {
+    const from = props.comment.metadata?.fromStatus
+    const to = props.comment.metadata?.toStatus
+    if (!from || !to) return props.comment.content
+    return t('post.comment.statusChanged', {
+      from: t(`status.${from}`),
+      to: t(`status.${to}`),
+    })
+  }
+
+  const from = props.comment.metadata?.fromAssigneeName ?? t('post.detail.none')
+  const to = props.comment.metadata?.toAssigneeName ?? t('post.detail.none')
+  return t('post.comment.assigneeChanged', { from, to })
 })
 
 async function handleDelete() {
@@ -98,9 +106,19 @@ function initials(name: string | null) {
   />
 
   <!-- Immutable status history entry -->
-  <div v-else-if="isStatusChange" class="flex items-center gap-3 rounded-lg border border-border bg-secondary/30 px-4 py-3 text-sm">
-    <Icon name="lucide:history" size="16" class="shrink-0 text-muted-foreground" />
-    <span class="font-medium">{{ statusChangeText }}</span>
+  <div v-else-if="isAuditLog" class="flex items-center gap-3 rounded-lg border border-border bg-secondary/30 px-4 py-3 text-sm">
+    <img
+      v-if="comment.author?.image"
+      :src="comment.author.image"
+      :alt="comment.author.name"
+      class="h-8 w-8 shrink-0 rounded-full object-cover"
+      referrerpolicy="no-referrer"
+    >
+    <div v-else class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-foreground/10 text-xs font-bold">
+      {{ initials(comment.author?.name) }}
+    </div>
+    <span class="shrink-0 font-bold">{{ comment.author?.name ?? $t('common.anonymous') }}</span>
+    <span class="font-medium">{{ auditLogText }}</span>
     <span class="ml-auto shrink-0 text-xs text-muted-foreground">{{ timeAgo(comment.createdAt) }}</span>
   </div>
 

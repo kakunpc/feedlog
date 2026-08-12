@@ -40,6 +40,12 @@ export interface PostAuthor {
   image: string | null
 }
 
+export interface PostAssignee {
+  id: string
+  name: string | null
+  image: string | null
+}
+
 // List item (without content)
 export interface PostListItem {
   id: string
@@ -64,6 +70,8 @@ export interface PostDetail {
   content: string
   status: string
   boardId: string | null
+  assigneeId: string | null
+  assignee: PostAssignee | null
   voteCount: number
   commentCount: number
   mergedCount: number

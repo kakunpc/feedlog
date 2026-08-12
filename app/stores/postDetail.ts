@@ -79,6 +79,8 @@ export const usePostDetailStore = defineStore('postDetail', () => {
       content: '',
       status: item.status,
       boardId: item.boardId,
+      assigneeId: null,
+      assignee: null,
       voteCount: item.voteCount,
       commentCount: item.commentCount,
       mergedCount: item.mergedCount,
@@ -337,7 +339,7 @@ export const usePostDetailStore = defineStore('postDetail', () => {
 
   async function updatePost(
     slug: string,
-    data: { title?: string; content?: string; status?: string; boardId?: string | null },
+    data: { title?: string; content?: string; status?: string; boardId?: string | null; assigneeId?: string | null },
     isAdmin = false,
   ) {
     const p = posts.value[slug]
@@ -348,6 +350,7 @@ export const usePostDetailStore = defineStore('postDetail', () => {
     if (res.content !== undefined) p.content = res.content
     if (res.status) p.status = res.status
     if (res.boardId !== undefined) p.boardId = res.boardId
+    if (res.assigneeId !== undefined) p.assigneeId = res.assigneeId
     if (res.commentCount !== undefined) p.commentCount = res.commentCount
     if (res.updatedAt) p.updatedAt = res.updatedAt
   }

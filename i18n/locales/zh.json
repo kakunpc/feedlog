@@ -236,6 +236,7 @@
       "viewMoreComments": "查看更多评论",
       "board": "看板",
       "status": "状态",
+      "assignee": "负责人",
       "author": "作者",
       "copyEmail": "复制邮箱",
       "emailCopied": "邮箱已复制到剪贴板",
@@ -293,6 +294,7 @@
       "notifyUpvotersHint": "额外通知点赞过的人。作者和已订阅的人始终会收到。",
       "emailUpvoters": "邮件通知点赞者",
       "statusChanged": "从{from}更改为{to}",
+      "assigneeChanged": "负责人从{from}更改为{to}",
       "adminBadge": "管理员"
     },
     "statusNotify": {
