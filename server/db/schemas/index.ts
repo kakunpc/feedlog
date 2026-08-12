@@ -11,6 +11,7 @@ export {
   organization,
   member,
   invitation,
+  accessInvite,
   sessionRelations,
   accountRelations,
   organizationRelations,
@@ -31,7 +32,7 @@ export {
   postUnread,
 } from './widget'
 export type { WidgetCustomRule } from './widget'
-import { user, session, account, organization, member, invitation } from './auth'
+import { user, session, account, organization, member, invitation, accessInvite } from './auth'
 
 // Custom type for pgvector's vector column
 const vector = customType<{ data: number[]; driverParam: string }>({

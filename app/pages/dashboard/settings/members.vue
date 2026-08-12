@@ -33,21 +33,25 @@ interface InvitationView {
   expiresAt: string | null
   inviterId: string
 }
+interface AccessInviteView { id: string; role: Role; enabled: boolean; expiresAt: string; createdAt: string }
 
 const members = ref<MemberView[]>([])
 const invitations = ref<InvitationView[]>([])
+const accessInvites = ref<AccessInviteView[]>([])
 const loading = ref(true)
 
 async function refresh() {
   loading.value = true
   try {
-    const [memRes, invRes] = await Promise.all([
+    const [memRes, invRes, linkRes] = await Promise.all([
       authClient.organization.listMembers({ query: { organizationId: orgId.value, limit: 200 } }),
       authClient.organization.listInvitations({ query: { organizationId: orgId.value } }),
+      $fetch<AccessInviteView[]>('/api/admin/access-invites'),
     ])
     members.value = ((memRes as { data?: { members?: MemberView[] } }).data?.members ?? []) as MemberView[]
     invitations.value = (((invRes as { data?: InvitationView[] }).data) ?? [])
       .filter(i => i.status === 'pending')
+    accessInvites.value = linkRes
   } finally {
     loading.value = false
   }
@@ -75,6 +79,9 @@ const showInvite = ref(false)
 const inviteEmails = ref('')
 const inviteRole = ref<Role>('contributor')
 const inviting = ref(false)
+const showLinkInvite = ref(false)
+const linkInviteRole = ref<Role>('contributor')
+const creatingLink = ref(false)
 
 // Whether an outbound email provider (Resend) is configured. When false, the
 // invite is still created but no email is sent — admin must copy the link
@@ -85,6 +92,31 @@ const { data: authCfg } = await useFetch<{ emailProvider?: boolean }>('/api/auth
 })
 const emailConfigured = computed(() => !!authCfg.value?.emailProvider)
 const currentInviteRole = computed(() => roleOptions.value.find(r => r.key === inviteRole.value)!)
+const currentLinkRole = computed(() => roleOptions.value.find(r => r.key === linkInviteRole.value)!)
+
+async function createAccessInvite() {
+  creatingLink.value = true
+  try {
+    const created = await $fetch<AccessInviteView>('/api/admin/access-invites', {
+      method: 'POST', body: { role: linkInviteRole.value },
+    })
+    await refresh()
+    showLinkInvite.value = false
+    copyAccessInviteLink(created.id, false)
+    toast.success(t('settings.members.linkCreated'))
+  } finally { creatingLink.value = false }
+}
+
+function copyAccessInviteLink(id: string, announce = true) {
+  navigator.clipboard?.writeText(`${window.location.origin}/invite?link=${id}`)
+  if (announce) toast.success(t('settings.members.linkCopied'))
+}
+
+async function disableAccessInvite(id: string) {
+  await $fetch(`/api/admin/access-invites/${id}`, { method: 'DELETE' })
+  await refresh()
+  toast.success(t('settings.members.linkDisabled'))
+}
 
 async function sendInvite() {
   const emails = inviteEmails.value.split(/[,;\n\s]+/).map(s => s.trim()).filter(Boolean)
@@ -166,14 +198,14 @@ function initials(name: string | undefined): string {
         <h2 class="font-heading text-lg font-bold">{{ $t('settings.members.title') }}</h2>
         <p class="text-xs text-muted-foreground">{{ $t('settings.members.subtitle') }}</p>
       </div>
-      <button
-        v-if="canManage"
-        class="h-9 px-4 rounded-lg bg-primary text-primary-foreground text-xs font-heading font-bold hover:opacity-90 transition-all flex items-center gap-2"
-        @click="showInvite = true"
-      >
-        <Icon name="lucide:user-plus-2" size="14" />
-        {{ $t('settings.members.invite') }}
-      </button>
+      <div v-if="canManage" class="flex items-center gap-2">
+        <button class="h-9 px-3 rounded-lg border border-border text-xs font-heading font-bold hover:bg-secondary transition-all flex items-center gap-2" @click="showLinkInvite = true">
+          <Icon name="lucide:link" size="14" /> {{ $t('settings.members.createLink') }}
+        </button>
+        <button class="h-9 px-4 rounded-lg bg-primary text-primary-foreground text-xs font-heading font-bold hover:opacity-90 transition-all flex items-center gap-2" @click="showInvite = true">
+          <Icon name="lucide:mail-plus" size="14" /> {{ $t('settings.members.invite') }}
+        </button>
+      </div>
     </header>
 
     <div class="flex-1 overflow-y-auto">
@@ -183,6 +215,22 @@ function initials(name: string | undefined): string {
         </template>
 
         <template v-else>
+          <section v-if="accessInvites.length" class="rounded-xl border border-border bg-card overflow-hidden">
+            <div class="px-5 py-3 border-b border-border">
+              <h3 class="font-heading font-bold text-sm">{{ $t('settings.members.inviteLinks') }}</h3>
+            </div>
+            <ul class="divide-y divide-border">
+              <li v-for="inv in accessInvites" :key="inv.id" class="px-5 py-3 flex items-center gap-3">
+                <div class="w-9 h-9 rounded-full bg-muted flex items-center justify-center shrink-0"><Icon name="lucide:link" size="14" /></div>
+                <div class="flex-1 min-w-0">
+                  <p class="text-sm font-semibold">{{ roleLabel(inv.role) }}</p>
+                  <p class="text-[11px] text-muted-foreground">{{ $t('settings.members.expiresIn', { time: formatExpiresIn(inv.expiresAt) }) }}</p>
+                </div>
+                <button class="h-8 px-3 rounded-md hover:bg-secondary text-xs font-semibold" @click="copyAccessInviteLink(inv.id)"><Icon name="lucide:copy" size="13" class="inline mr-1" />{{ $t('settings.members.copyLink') }}</button>
+                <button class="h-8 px-3 rounded-md hover:bg-red-50 text-xs font-semibold text-red-600" @click="disableAccessInvite(inv.id)">{{ $t('settings.members.disableLink') }}</button>
+              </li>
+            </ul>
+          </section>
           <!-- Pending invitations -->
           <section v-if="invitations.length" class="rounded-xl border border-border bg-card overflow-hidden">
             <div class="px-5 py-3 border-b border-border">
@@ -386,6 +434,28 @@ function initials(name: string | undefined): string {
           >
             {{ inviting ? (emailConfigured ? $t('settings.members.sending') : $t('settings.members.creating')) : (emailConfigured ? $t('settings.members.sendInvites') : $t('settings.members.createInvites')) }}
           </button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+
+    <Dialog v-model:open="showLinkInvite">
+      <DialogContent class="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>{{ $t('settings.members.createLinkTitle') }}</DialogTitle>
+          <DialogDescription>{{ $t('settings.members.createLinkDesc') }}</DialogDescription>
+        </DialogHeader>
+        <div>
+          <label class="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{{ $t('settings.members.roleLabel') }}</label>
+          <Select v-model="linkInviteRole" :disabled="creatingLink">
+            <SelectTrigger class="mt-2 w-full h-10"><SelectValue>{{ currentLinkRole.label }}</SelectValue></SelectTrigger>
+            <SelectContent><SelectItem v-for="r in availableRoles" :key="r.key" :value="r.key">{{ r.label }}</SelectItem></SelectContent>
+          </Select>
+          <p class="text-[11px] text-muted-foreground mt-2">{{ currentLinkRole.desc }}</p>
+          <div v-if="linkInviteRole === 'owner'" class="mt-3 p-3 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-900">{{ $t('settings.members.ownerWarning') }}</div>
+        </div>
+        <DialogFooter>
+          <button class="h-9 px-4 rounded-lg border border-border text-xs font-semibold" @click="showLinkInvite = false">{{ $t('common.cancel') }}</button>
+          <button class="h-9 px-4 rounded-lg bg-primary text-primary-foreground text-xs font-bold disabled:opacity-50" :disabled="creatingLink" @click="createAccessInvite">{{ creatingLink ? $t('settings.members.creating') : $t('settings.members.createLink') }}</button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

@@ -29,10 +29,15 @@ const id = computed(() => {
   const raw = route.query.id
   return typeof raw === 'string' ? raw : null
 })
+const linkId = computed(() => {
+  const raw = route.query.link
+  return typeof raw === 'string' ? raw : null
+})
 
 interface InvitationView {
   id: string
-  email: string
+  email?: string
+  kind?: 'link'
   status: string
   organizationName: string
   organizationSlug: string
@@ -52,13 +57,15 @@ const accepting = ref(false)
 // page and breaks the flow. Better-auth's acceptInvitation still does the
 // email-binding check at the security-critical step.
 onMounted(async () => {
-  if (!id.value) {
+  if (!id.value && !linkId.value) {
     error.value = 'invalid'
     loading.value = false
     return
   }
   try {
-    invitation.value = await $fetch<InvitationView>(`/api/invitations/${id.value}`)
+    invitation.value = linkId.value
+      ? await $fetch<InvitationView>(`/api/access-invitations/${linkId.value}`)
+      : await $fetch<InvitationView>(`/api/invitations/${id.value}`)
   } catch {
     error.value = 'invalid'
   } finally {
@@ -71,6 +78,7 @@ const state = computed<State>(() => {
   if (loading.value) return 'loading'
   if (error.value || !invitation.value) return 'invalid'
   if (!session.value?.user) return 'anonymous'
+  if (invitation.value.kind === 'link') return 'match'
   return session.value.user.email === invitation.value.email ? 'match' : 'mismatch'
 })
 
@@ -78,7 +86,11 @@ async function accept() {
   if (!invitation.value) return
   accepting.value = true
   try {
-    await authClient.organization.acceptInvitation({ invitationId: invitation.value.id })
+    if (invitation.value.kind === 'link') {
+      await $fetch(`/api/access-invitations/${invitation.value.id}/accept`, { method: 'POST' })
+    } else {
+      await authClient.organization.acceptInvitation({ invitationId: invitation.value.id })
+    }
     // customSession embeds orgList in the session cookie cache (maxAge:
     // 60s). The just-acquired membership isn't visible there yet, so the
     // /dashboard admin middleware would see an empty orgList and bounce

@@ -141,6 +141,22 @@ export const invitation = pgTable(
   ],
 );
 
+// Reusable, email-less invitation links managed by FeedLog. The random UUID is
+// the bearer token; disabling or expiring the row invalidates the URL.
+export const accessInvite = pgTable(
+  "access_invite",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organization_id").notNull().references(() => organization.id, { onDelete: "cascade" }),
+    role: text("role").notNull(),
+    createdBy: text("created_by").notNull().references(() => user.id, { onDelete: "cascade" }),
+    enabled: boolean("enabled").notNull().default(true),
+    expiresAt: timestamp("expires_at").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [index("access_invite_org_idx").on(table.organizationId)],
+);
+
 export const userRelations = relations(user, ({ many }) => ({
   sessions: many(session),
   accounts: many(account),
