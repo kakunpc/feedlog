@@ -1,12 +1,9 @@
 import { z } from 'zod'
 import { and, eq } from 'drizzle-orm'
-import { getRequestURL } from 'h3'
 import { post } from '#layers/feedlog/server/db/schemas'
-import { resolvePostThreadRecipients, resolveOrgBranding, deliverToRecipients } from '#layers/feedlog/server/utils/notifications'
 import { POST_STATUSES } from '#layers/feedlog/shared/types/post'
 
-// POST /api/admin/posts/:id/notify-status — mail the post's subscribers that it
-// is now in status X. The status is already written by PATCH; this only sends.
+// Kept for compatibility with older clients. Status changes no longer send email.
 const bodySchema = z.object({
   status: z.enum(POST_STATUSES as unknown as [string, ...string[]]),
   note: z.string().trim().max(2000).optional(),
@@ -40,17 +37,5 @@ export default defineEventHandler(async (event) => {
   await markPostUnreadForAuthor(id, session.user.id)
     .catch((err: unknown) => console.error('[widget] unread mark failed', err))
 
-  // Resolve recipients synchronously so we can return the count; send async.
-  const { slug: orgSlug, brandColor } = await resolveOrgBranding(orgId)
-  const recipients = orgSlug ? await resolvePostThreadRecipients(orgId, id, session.user.id) : []
-
-  if (recipients.length > 0) {
-    event.waitUntil(
-      deliverToRecipients(orgId, orgSlug, brandColor, recipients, 'post.status_changed',
-        { to: body.status, note: body.note || undefined }, getRequestURL(event).origin)
-        .catch((err: unknown) => console.error('[notifications] status notify failed', err)),
-    )
-  }
-
-  return { ok: true, recipients: recipients.length }
+  return { ok: true, recipients: 0 }
 })

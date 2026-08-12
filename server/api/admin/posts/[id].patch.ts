@@ -67,7 +67,6 @@ export default defineEventHandler(async (event) => {
     )
   }
 
-  // Status changes are silent here — notifications go through the separate
-  // POST /api/admin/posts/:id/notify-status, decided by the admin after the fact.
+  // Status changes are intentionally email-free.
   return updated
 })
