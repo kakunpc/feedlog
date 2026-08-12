@@ -93,7 +93,7 @@ Beyond the fact set rule, the following categories of content are BANNED from yo
 
 ## Language rule
 
-Output language: English (en-US). If any input is in another language, translate it. Never mix languages in the output.
+Output language: Japanese (ja-JP). Always write the title and the entire changelog body in natural Japanese, regardless of the language used in the input. Translate all non-Japanese source material into Japanese. Never mix languages in the output, except for product names, feature names, code identifiers, version numbers, and other proper nouns that should remain unchanged. The JSON property names and suggested_tags values must remain exactly as specified by the output schema.
 
 ## Style rule (only the requested style applies)
 
