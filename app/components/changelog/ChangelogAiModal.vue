@@ -33,25 +33,25 @@ const styleOptions = computed(() => [
     id: 'concise' as AiStyle,
     name: t('changelog.ai.styles.concise.name'),
     desc: t('changelog.ai.styles.concise.desc'),
-    example: `<p><strong>Dark Mode Toggle</strong></p><p class="mt-1.5">You can now manually switch between light and dark themes in your personal settings, or let it sync automatically with your system preferences.</p>`,
+    example: `<p><strong>ダークモード切り替え機能</strong></p><p class="mt-1.5">個人設定からライトテーマとダークテーマを手動で切り替えられるようになりました。端末の設定に合わせて自動的に切り替えることもできます。</p>`,
   },
   {
     id: 'structured' as AiStyle,
     name: t('changelog.ai.styles.structured.name'),
     desc: t('changelog.ai.styles.structured.desc'),
-    example: `<p><strong>v0.3.0 — 🌙 Dark Mode & Performance</strong></p><p class="mt-1.5">This release brings the highly requested Dark Mode and significant performance improvements to the roadmap board.</p><p class="mt-3">💎 <strong>Improvements</strong></p><ul class="mt-1 ml-4 list-disc space-y-0.5"><li>Added a dark mode toggle in personal settings</li><li>Reduced roadmap column repaint lag during drag-and-drop</li><li>Faster skeleton loading for large feedback boards</li></ul><p class="mt-3">🐞 <strong>Fixes</strong></p><ul class="mt-1 ml-4 list-disc space-y-0.5"><li>Fixed an issue where avatars wouldn't load on mobile devices</li><li>Resolved a crash when deleting comments with attachments</li></ul>`,
+    example: `<p><strong>v0.3.0 — 🌙 ダークモードとパフォーマンス改善</strong></p><p class="mt-1.5">多くのご要望をいただいていたダークモードを追加し、ロードマップの表示速度を大幅に改善しました。</p><p class="mt-3">💎 <strong>改善</strong></p><ul class="mt-1 ml-4 list-disc space-y-0.5"><li>個人設定にダークモード切り替えを追加</li><li>ドラッグ操作中のロードマップの描画遅延を軽減</li><li>多数のフィードバックを表示する際の読み込みを高速化</li></ul><p class="mt-3">🐞 <strong>修正</strong></p><ul class="mt-1 ml-4 list-disc space-y-0.5"><li>モバイル端末でアバターが表示されない問題を修正</li><li>添付ファイル付きコメントを削除すると強制終了する問題を修正</li></ul>`,
   },
   {
     id: 'benefit-led' as AiStyle,
     name: t('changelog.ai.styles.benefitLed.name'),
     desc: t('changelog.ai.styles.benefitLed.desc'),
-    example: `<p><strong>Work comfortably at night with Dark Mode 🌙</strong></p><p class="mt-1.5">Stop straining your eyes during late-night triage sessions! You can now switch Feedlog to dark mode, making it easier to read and manage feedback in low-light environments.</p><ul class="mt-2 ml-4 list-disc space-y-0.5"><li>Toggle manually or sync with your system theme</li><li>High-contrast colors designed specifically to reduce eye fatigue</li><li>Available across all boards, roadmaps, and the admin dashboard</li></ul>`,
+    example: `<p><strong>ダークモードで夜間の作業をもっと快適に 🌙</strong></p><p class="mt-1.5">FeedLogをダークモードに切り替えられるようになりました。暗い環境でもフィードバックを読みやすく、目への負担を抑えながら管理できます。</p><ul class="mt-2 ml-4 list-disc space-y-0.5"><li>手動切り替えと端末テーマとの自動同期に対応</li><li>目の疲れを軽減する高コントラスト配色</li><li>ボード、ロードマップ、管理画面のすべてで利用可能</li></ul>`,
   },
   {
     id: 'witty' as AiStyle,
     name: t('changelog.ai.styles.witty.name'),
     desc: t('changelog.ai.styles.witty.desc'),
-    example: `<p><strong>Feedlog v0.2.9</strong></p><p class="mt-1.5">We finally paid the electricity bill and turned off the lights! Dark mode is now officially available. We also spent the weekend sweeping the floors and squashing a few pesky bugs that were crawling around the roadmap board. Everything is now shipshape and running smoothly. Happy feedback hunting!</p>`,
+    example: `<p><strong>FeedLog v0.2.9</strong></p><p class="mt-1.5">ついに照明を落とす準備が整いました！ダークモードが正式に利用できます。週末にはロードマップを隅々まで掃除して、潜んでいた厄介な不具合も退治しました。これまで以上に快適なフィードバック探しをお楽しみください！</p>`,
   },
 ])
 
