@@ -24,7 +24,6 @@ export default defineEventHandler(async (event): Promise<PostDetail> => {
       authorId: post.authorId,
       authorName: user.name,
       authorImage: user.image,
-      authorEmail: user.email,
       createdAt: post.createdAt,
       updatedAt: post.updatedAt,
     })
@@ -80,10 +79,6 @@ export default defineEventHandler(async (event): Promise<PostDetail> => {
     subscribed = !!(result as any)?.subscribed
   }
 
-  // Gates author.email below: shipping it to end users would hand every
-  // reporter's address to anyone who opens a post.
-  const isStaff = !!getOrgMemberRole(session, orgId)
-
   // If merged, fetch canonical post info
   let canonicalPost: { slug: string; title: string } | undefined
   if (row.mergedTo) {
@@ -112,7 +107,6 @@ export default defineEventHandler(async (event): Promise<PostDetail> => {
       id: row.authorId,
       name: row.authorName,
       image: row.authorImage,
-      ...(isStaff ? { email: row.authorEmail } : {}),
     },
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
