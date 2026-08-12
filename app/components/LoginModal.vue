@@ -14,15 +14,16 @@ const loading = ref(false)
 interface AuthMethods {
   google: boolean
   github: boolean
+  discord: boolean
   email: boolean
   emailVerification: boolean
 }
 const { data: authCfg } = await useFetch<AuthMethods>('/api/auth-config', {
   key: 'auth-config',
   // If the endpoint hiccups, fall back to email-only so the modal still renders.
-  default: () => ({ google: false, github: false, email: true, emailVerification: false }),
+  default: () => ({ google: false, github: false, discord: false, email: true, emailVerification: false }),
 })
-const hasOAuth = computed(() => !!(authCfg.value?.google || authCfg.value?.github))
+const hasOAuth = computed(() => !!(authCfg.value?.google || authCfg.value?.github || authCfg.value?.discord))
 const emailEnabled = computed(() => !!authCfg.value?.email)
 const showSeparator = computed(() => hasOAuth.value && emailEnabled.value)
 
@@ -70,7 +71,7 @@ function switchTo(target: ModalState) {
 // --- Social OAuth (shared popup logic) ---
 //
 // callbackURL is where better-auth 302s after the OAuth flow finishes
-// (the redirect_uri registered with Google/GitHub).
+// (the redirect_uri registered with Google/GitHub/Discord).
 //
 //   - Default (authDomain unset or same-origin as the current page):
 //     callbackURL='/auth/callback' — same-origin popup that postMessages
@@ -96,7 +97,7 @@ function buildCallbackURL(): string {
   return `${authDomain}/api/auth/post-login?return=${encodeURIComponent(returnTo)}`
 }
 
-async function loginWithSocial(provider: 'google' | 'github') {
+async function loginWithSocial(provider: 'google' | 'github' | 'discord') {
   loading.value = true
 
   const res = await $fetch<{ url: string }>('/api/auth/sign-in/social', {
@@ -345,6 +346,17 @@ const showPassword = ref(false)
           >
             <Icon name="mdi:github" class="mr-2 size-5" />
             {{ $t('auth.signIn.github') }}
+          </Button>
+          <Button
+            v-if="authCfg?.discord"
+            class="w-full"
+            variant="outline"
+            size="lg"
+            :disabled="loading"
+            @click="loginWithSocial('discord')"
+          >
+            <Icon name="logos:discord-icon" class="mr-2 size-5" />
+            {{ $t('auth.signIn.discord') }}
           </Button>
         </div>
 

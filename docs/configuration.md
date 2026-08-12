@@ -100,7 +100,7 @@ BETTER_AUTH_URL=https://feedback.yourdomain.com
 
 ## Authentication
 
-OAuth providers are independent — configure one, both, or neither. If
+OAuth providers are independent — configure any combination or none. If
 **no** OAuth is configured, email + password login is auto-enabled so a
 fresh install is never locked out.
 
@@ -122,6 +122,16 @@ must be exactly:
 
 ```
 <BETTER_AUTH_URL>/api/auth/callback/github
+```
+
+### `DISCORD_CLIENT_ID` / `DISCORD_CLIENT_SECRET` &nbsp;⬜ optional
+
+Discord OAuth credentials. Create an application in the
+[Discord Developer Portal](https://discord.com/developers/applications). Add
+this URL under OAuth2 → Redirects:
+
+```
+<BETTER_AUTH_URL>/api/auth/callback/discord
 ```
 
 ### `AUTH_EMAIL_ENABLED` &nbsp;⬜ optional
@@ -284,10 +294,11 @@ The domain must be verified with your email provider.
 - `DATABASE_URL` is **replaced** by the `POSTGRES` Hyperdrive binding —
   see [`wrangler.toml`](../wrangler.toml) and the [Workers deploy guide](./deploy/cloudflare-workers.md).
 - `S3_*` doesn't apply — blob storage uses the `BLOB` R2 binding.
-- Public values (`BETTER_AUTH_URL`, `GOOGLE_CLIENT_ID`, `GITHUB_CLIENT_ID`)
+- Public values (`BETTER_AUTH_URL`, `GOOGLE_CLIENT_ID`, `GITHUB_CLIENT_ID`,
+  `DISCORD_CLIENT_ID`)
   go in `[vars]` of `wrangler.toml`.
 - Secrets (`BETTER_AUTH_SECRET`, `SYSTEM_ADMIN_EMAILS`,
-  `GOOGLE_CLIENT_SECRET`, `GITHUB_CLIENT_SECRET`, `OPENAI_API_KEY`,
+  `GOOGLE_CLIENT_SECRET`, `GITHUB_CLIENT_SECRET`, `DISCORD_CLIENT_SECRET`, `OPENAI_API_KEY`,
   `RESEND_API_KEY`) are set via `wrangler secret put <NAME>` and are
   never committed to the repo.
 

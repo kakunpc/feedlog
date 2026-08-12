@@ -36,16 +36,19 @@ bucket_name = "feedlog"
 
 # Public (non-secret) configuration.
 # Secrets (BETTER_AUTH_SECRET, SYSTEM_ADMIN_EMAILS, GOOGLE_CLIENT_SECRET,
+# DISCORD_CLIENT_SECRET,
 # OPENAI_API_KEY, etc.) must be set via `wrangler secret put <NAME>` or via
 # the Deploy Button form (backed by .dev.vars.example), NOT declared here.
 [vars]
 BETTER_AUTH_URL = "https://your-worker.workers.dev"
 # GOOGLE_CLIENT_ID = "your-google-oauth-client-id.apps.googleusercontent.com"
+# DISCORD_CLIENT_ID = "your-discord-application-id"
 
 # Secrets to configure via `wrangler secret put` (manual-deploy path):
 #   wrangler secret put BETTER_AUTH_SECRET       # random 32+ char string
 #   wrangler secret put SYSTEM_ADMIN_EMAILS      # e.g. you@example.com
 #   wrangler secret put GOOGLE_CLIENT_SECRET     # if enabling Google OAuth
+#   wrangler secret put DISCORD_CLIENT_SECRET    # if enabling Discord OAuth
 #   wrangler secret put OPENAI_API_KEY           # if enabling AI features
 
 [observability]

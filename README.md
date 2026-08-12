@@ -149,6 +149,7 @@ overrides, and authentication toggles.
 | `BETTER_AUTH_URL`                             |    No    | Public URL of the app (no trailing slash). Inferred from the request `Host` header by default. Set explicitly behind Host-rewriting proxies or to anchor OAuth callback URLs. | `https://feedback.yourdomain.com`      |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`   |    No    | Enable Google OAuth. Authorized redirect URI: `<BETTER_AUTH_URL>/api/auth/callback/google`.                                                  | `…apps.googleusercontent.com`          |
 | `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET`   |    No    | Enable GitHub OAuth. Callback URL: `<BETTER_AUTH_URL>/api/auth/callback/github`.                                                             | `Iv1.abc123…`                          |
+| `DISCORD_CLIENT_ID` / `DISCORD_CLIENT_SECRET` |    No    | Enable Discord OAuth. Redirect URI: `<BETTER_AUTH_URL>/api/auth/callback/discord`.                                                          | `123456789…`                           |
 | `OPENAI_API_KEY`                              |    No    | Enable AI features (similar-idea detection, AI-drafted changelog entries). Without it, those features are silently disabled.                 | `sk-…`                                 |
 | `OPENAI_BASE_URL`                             |    No    | Override the OpenAI endpoint — works with Azure OpenAI, LiteLLM, self-hosted gateways. Defaults to `https://api.openai.com/v1`.              | `https://your-litellm-host/v1`         |
 | `RESEND_API_KEY`                              |    No    | Enable transactional email via [Resend](https://resend.com) (password resets, optional sign-up verification). Without it, emails are logged to stdout. | `re_…`                                 |
@@ -165,7 +166,7 @@ overrides, and authentication toggles.
 - **Roadmap** — Drag-and-drop view of planned, in-progress, and shipped work.
 - **Changelog** — Publish release notes with AI-drafted style presets (concise, structured, benefit-led, witty).
 - **Similar-idea merge** — Vector embeddings (OpenAI `text-embedding-3-large`, 768-dim) surface duplicate feedback before it fragments the board.
-- **Authentication** — Email / password, Google OAuth, GitHub OAuth, admin role handling — powered by [better-auth](https://www.better-auth.com).
+- **Authentication** — Email / password, Google OAuth, GitHub OAuth, Discord OAuth, admin role handling — powered by [better-auth](https://www.better-auth.com).
 - **Comments & discussions** — Markdown-powered threads on every post.
 - **Notifications** — Authors and upvoters are subscribed automatically and emailed when a post's status changes or the team replies officially; unsubscribe per post at any time. Admins aren't notified. Requires an email provider.
 
@@ -176,7 +177,7 @@ overrides, and authentication toggles.
 | Framework | Nuxt 4 (Vue 3, Nitro, TypeScript) |
 | Database | PostgreSQL 17+ with `pgvector` for embeddings |
 | ORM / driver | Drizzle ORM + `postgres-js` |
-| Authentication | better-auth (email/password + Google OAuth + GitHub OAuth + admin plugin) |
+| Authentication | better-auth (email/password + Google OAuth + GitHub OAuth + Discord OAuth + admin plugin) |
 | AI | OpenAI-compatible API (OpenAI, Azure, LiteLLM, Ollama…) |
 | Blob storage | Cloudflare R2 binding, Vercel Blob, or S3-compatible via `aws4fetch` (AWS, MinIO, OSS) |
 | State | Pinia |

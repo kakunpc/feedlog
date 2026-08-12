@@ -19,7 +19,8 @@ const systemAdminEmails = env.SYSTEM_ADMIN_EMAILS?.split(',').map(s => s.trim())
 
 const hasGoogle = !!(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET)
 const hasGithub = !!(env.GITHUB_CLIENT_ID && env.GITHUB_CLIENT_SECRET)
-const hasOAuth = hasGoogle || hasGithub
+const hasDiscord = !!(env.DISCORD_CLIENT_ID && env.DISCORD_CLIENT_SECRET)
+const hasOAuth = hasGoogle || hasGithub || hasDiscord
 const hasEmailProvider = !!env.RESEND_API_KEY
 
 function parseBool(v: string | undefined): boolean | undefined {
@@ -32,7 +33,7 @@ const requireEmailVerification = parseBool(env.AUTH_EMAIL_VERIFY) ?? hasEmailPro
 
 if (!hasOAuth && !emailLoginEnabled) {
   throw new Error(
-    '[auth] No sign-in method configured. Enable OAuth (GOOGLE_CLIENT_ID / GITHUB_CLIENT_ID) or set AUTH_EMAIL_ENABLED=true.',
+    '[auth] No sign-in method configured. Enable OAuth (GOOGLE_CLIENT_ID / GITHUB_CLIENT_ID / DISCORD_CLIENT_ID) or set AUTH_EMAIL_ENABLED=true.',
   )
 }
 
@@ -47,6 +48,12 @@ if (hasGithub) {
   socialProviders.github = {
     clientId: env.GITHUB_CLIENT_ID!,
     clientSecret: env.GITHUB_CLIENT_SECRET!,
+  }
+}
+if (hasDiscord) {
+  socialProviders.discord = {
+    clientId: env.DISCORD_CLIENT_ID!,
+    clientSecret: env.DISCORD_CLIENT_SECRET!,
   }
 }
 
@@ -254,6 +261,7 @@ export const auth = new Proxy({} as AuthInstance, {
 export const authConfig = {
   google: hasGoogle,
   github: hasGithub,
+  discord: hasDiscord,
   email: emailLoginEnabled,
   emailVerification: !!emailVerification,
   // True when an outbound email provider (Resend) is configured. Surfaced

@@ -324,6 +324,7 @@
       "subtitle": "登录后即可提交反馈、投票和评论",
       "google": "使用 Google 登录",
       "github": "使用 GitHub 登录",
+      "discord": "使用 Discord 登录",
       "or": "或",
       "withEmail": "使用邮箱登录",
       "noAccount": "还没有账号?",

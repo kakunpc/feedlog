@@ -73,9 +73,10 @@ To enable OAuth sign-in (nicer UX than email + password), also set one of:
 |--------|-----------|
 | GitHub OAuth (recommended — 5 min setup) | `GITHUB_CLIENT_ID` + `GITHUB_CLIENT_SECRET` |
 | Google OAuth | `GOOGLE_CLIENT_ID` + `GOOGLE_CLIENT_SECRET` |
+| Discord OAuth | `DISCORD_CLIENT_ID` + `DISCORD_CLIENT_SECRET` |
 
 OAuth apps need their callback URL set to
-`https://<your-url>/api/auth/callback/<github\|google>` before sign-in will
+`https://<your-url>/api/auth/callback/<github\|google\|discord>` before sign-in will
 complete.
 
 **Optional — everything else:**

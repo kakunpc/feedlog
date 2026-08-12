@@ -84,6 +84,7 @@ annotated source. Quick reference:
 | `S3_ACCESS_KEY_ID` + `S3_SECRET_ACCESS_KEY` + `S3_BUCKET` (+ `S3_ENDPOINT` / `S3_REGION`) | ⬜ for persistent off-host uploads | Enables S3-compatible blob storage at runtime. See [Enabling S3 storage](#enabling-s3-compatible-storage-runtime). |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | ⬜ | Enable Google OAuth |
 | `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` | ⬜ | Enable GitHub OAuth |
+| `DISCORD_CLIENT_ID` / `DISCORD_CLIENT_SECRET` | ⬜ | Enable Discord OAuth |
 | `OPENAI_API_KEY` + `OPENAI_BASE_URL` | ⬜ | Enable similar-idea merge and AI changelog drafting |
 | `EMAIL_PROVIDER` / `RESEND_API_KEY` / `EMAIL_FROM` | ⬜ | Transactional email |
 
