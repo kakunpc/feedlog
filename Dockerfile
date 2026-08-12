@@ -32,6 +32,10 @@ COPY . .
 # any S3-compatible service via plain `docker run -e S3_*=...`.
 
 ENV NITRO_PRESET=node-server
+# Nitro's production bundle can exceed Node's default ~2 GB heap while
+# Rollup traces the server dependency graph. This only affects the builder;
+# the runtime container keeps Node's normal memory limit.
+ENV NODE_OPTIONS=--max-old-space-size=4096
 RUN pnpm build
 
 # Stage 3: Production
