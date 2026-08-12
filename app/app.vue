@@ -3,9 +3,6 @@ import { Toaster } from 'vue-sonner'
 import 'vue-sonner/style.css'
 import { derivePortalThemeVars, styleObjectToCss } from '#layers/feedlog/shared/utils/branding'
 
-// Site-wide share-card defaults; per-page title/description come from usePageOg.
-// og:image must be absolute, so build it from the request origin.
-const ogImage = `${useRequestURL().origin}/og.png`
 const portal = usePortalOrg()
 const { mode, themed, resolvedDark } = useThemeMode()
 const brandCss = computed(() => {
@@ -36,12 +33,7 @@ if (import.meta.client) {
 
 useSeoMeta({
   ogSiteName: () => portal.value.name,
-  ogImage,
-  ogImageWidth: 1200,
-  ogImageHeight: 630,
-  ogImageType: 'image/png',
-  twitterImage: ogImage,
-  twitterCard: 'summary_large_image',
+  twitterCard: 'summary',
 })
 
 const localeHead = useLocaleHead()
@@ -49,7 +41,7 @@ const localeHead = useLocaleHead()
 // i18n emits hreflang/canonical/og:url as relative paths (empty for the
 // unprefixed default locale) because i18n.baseUrl can't carry a per-request
 // value under multi-tenant hosting. Search engines require absolute URLs, so
-// resolve them against the request origin — same origin used for og:image.
+// resolve them against the request origin.
 const seoOrigin = useRequestURL().origin
 const absoluteSeoUrl = (href?: string) => {
   try { return new URL(href || '/', seoOrigin).href }

@@ -3,7 +3,7 @@ import { generateExcerpt } from '#layers/feedlog/shared/utils/markdown'
 
 // Per-page title + description, single-sourced into <title> / og: / twitter:.
 // Copy has two variants on usePortalOrg().isDefault: the org name woven in, or
-// generic first-person for the unnamed default org. og:image / og:site_name live in app.vue.
+// generic first-person for the unnamed default org. og:site_name lives in app.vue.
 type OgPage =
   | { kind: 'home' }
   | { kind: 'roadmap' }
