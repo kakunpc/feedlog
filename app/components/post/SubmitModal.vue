@@ -213,7 +213,7 @@ watch(open, (v) => {
             <div class="editor-preview-styled flex-1 min-h-[120px] transition-all duration-300">
               <ThemedMdEditor
                 v-model="content"
-                :language="locale === 'zh' ? 'zh-CN' : 'en-US'"
+                :language="locale === 'ja' ? 'ja-JP' : locale === 'zh' ? 'zh-CN' : 'en-US'"
                 :placeholder="$t('post.submit.bodyPlaceholder')"
                 :preview="false"
                 :max-length="10000"
@@ -263,4 +263,3 @@ watch(open, (v) => {
     @update:open="showDetailSlug = null"
   />
 </template>
-
