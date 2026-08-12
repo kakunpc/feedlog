@@ -87,8 +87,11 @@ export default defineNuxtConfig({
     families: [
       {
         name: 'Inter',
-        provider: 'google',
-        weights: [400, 500, 600, 700],
+        // Keep builds deterministic. The Google provider resolves URLs at
+        // build time, and stale Google Fonts metadata can make Docker builds
+        // fail with a 404. If an embedding app supplies Inter it is used;
+        // standalone installs fall back to the system sans-serif stack.
+        provider: 'none',
       },
     ],
   },
