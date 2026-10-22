@@ -12,9 +12,10 @@ base digest for the 2026-10-21 security release.
   `<BETTER_AUTH_URL>/api/auth/callback/discord`. With only Discord configured,
   email login remains disabled unless explicitly enabled. As with upstream's
   Google/GitHub providers, subsequent sign-ins preserve in-app profile edits.
-- Japanese remains the portal default. Existing Japanese translations remain;
-  new upstream strings currently use English fallback text in the Japanese
-  catalog. Full translation of new upstream features is separate work.
+- Japanese remains the portal default. The 534 remaining English UI messages
+  in the Japanese catalog are translated, including Help, Inbox, MCP and the
+  Markdown editor. Product names, technical units, sample email addresses and
+  interpolation syntax are preserved.
 - Reusable invitation URLs, assignees, status/assignee comment history, cancelled
   status, email hiding, email-free feedback/comment notifications, and PNG/JPEG
   plus MP4 attachments are retained. Upstream's status picker replaces the old
