@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { sanitizeAttachmentHtml } from '~/utils/attachment'
 
 const props = withDefaults(defineProps<{
   parentId?: string
@@ -29,7 +28,8 @@ const isEditing = computed(() => !!props.initialContent)
 const showNotify = computed(() => props.canNotify && !isReply.value && !isEditing.value)
 const submitDisabled = computed(() => !content.value.trim() || props.loading)
 
-const { onUploadImg } = useUploadImg()
+const { ensureIdentity } = useGuestSession()
+const { onUploadImg } = useUploadImg(() => ensureIdentity('allowComment'))
 
 // Footer: '=' pushes slot content to the right, 0 = first defFooters child
 const footers = ['=', 0] as const
@@ -57,8 +57,8 @@ defineExpose({ clear })
       :placeholder="placeholder || (isReply ? $t('post.comment.replyPlaceholder') : $t('post.comment.addPlaceholder'))"
       :preview="false"
       :max-length="5000"
-      :toolbars="['bold', 'italic', '-', 'link', 'unorderedList', 'code', 'codeRow', 'image']"
-      :sanitize="sanitizeAttachmentHtml"
+      :toolbars="['bold', 'italic', '-', 'link', 'unorderedList', 'code', 'codeRow', 'table', 'image']"
+
       :footers="footers"
       :style="{ height: 'auto', minHeight: isReply ? '120px' : '160px' }"
       @on-upload-img="onUploadImg"
@@ -74,11 +74,15 @@ defineExpose({ clear })
             {{ $t('common.cancel') }}
           </Button>
           <div class="flex items-center">
+            <!-- Absent while editing: saving an edit is a different action, and
+                 this one button serves both. -->
             <Button
               variant="default"
               size="sm"
               :class="showNotify ? 'rounded-r-none' : ''"
               :disabled="submitDisabled"
+              :data-fdl-action="isEditing ? undefined : 'comment_submit'"
+              :data-fdl-source="isEditing ? undefined : (isReply ? 'reply' : 'post')"
               @click="handleSubmit"
             >
               {{ isEditing ? $t('common.save') : (isReply ? $t('post.comment.reply') : $t('post.comment.comment')) }}
@@ -136,7 +140,7 @@ defineExpose({ clear })
 </template>
 
 <style scoped>
-/* Override MdEditor's monospace font to match project's body font */
+/* Match source editing to the surrounding comment typography. */
 .comment-editor :deep(.cm-editor),
 .comment-editor :deep(.cm-editor .cm-content),
 .comment-editor :deep(.cm-editor .cm-line),
@@ -158,10 +162,6 @@ defineExpose({ clear })
   border: 1px solid var(--border);
 }
 
-/* Hide MdEditor's custom scrollbar, use browser native on CodeMirror */
-.comment-editor :deep(.md-editor-custom-scrollbar__track) {
-  display: none !important;
-}
 .comment-editor :deep(.cm-scroller) {
   overflow-y: auto !important;
   scrollbar-width: thin;
