@@ -73,6 +73,9 @@
   --status-cancelled: #ef4444;
   --status-cancelled-bg: rgba(239, 68, 68, 0.1);
   --status-cancelled-border: rgba(239, 68, 68, 0.2);
+  --status-archived: #8d6e52;
+  --status-archived-bg: rgba(141, 110, 82, 0.1);
+  --status-archived-border: rgba(141, 110, 82, 0.22);
   /* Background: #FBF9F6 warm beige */
   --background: oklch(0.983 0.004 78.2);
   /* Foreground: #2C2625 warm dark brown */
@@ -142,6 +145,9 @@
   --status-cancelled: #f87171;
   --status-cancelled-bg: rgba(248, 113, 113, 0.15);
   --status-cancelled-border: rgba(248, 113, 113, 0.25);
+  --status-archived: #c6a184;
+  --status-archived-bg: rgba(198, 161, 132, 0.15);
+  --status-archived-border: rgba(198, 161, 132, 0.25);
 
   --background: oklch(0.200 0.010 30);
   --foreground: oklch(0.985 0.004 78.2);
@@ -180,6 +186,13 @@
 }
 
 @layer base {
+  /* Reserve space before an icon's generated CSS is available. */
+  .iconify {
+    display: inline-block;
+    width: 1em;
+    height: 1em;
+    flex-shrink: 0;
+  }
   * {
     @apply border-border outline-ring/50;
   }
@@ -196,10 +209,10 @@
 }
 
 
-/* md-editor modal and image preview conflict with Shadcn Dialog */
-/* md-editor / medium-zoom pointer-events hack */
-  .md-editor-modal-container,
-  .medium-zoom-overlay,
-  .medium-zoom-image--opened {
-    pointer-events: auto
-  }
+/* Shared Markdown content wraps prose and long URLs naturally. */
+.md-editor-preview.md-editor-preview,
+.md-editor-html.md-editor-html,
+.md-editor-preview.md-editor-preview :is(h1, h2, h3, h4, h5, h6, th, td) {
+  word-break: normal;
+  overflow-wrap: anywhere;
+}

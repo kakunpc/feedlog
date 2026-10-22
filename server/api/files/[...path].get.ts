@@ -42,11 +42,11 @@ export default defineEventHandler(async (event) => {
       const chunk = file.slice(start, end + 1, 'video/mp4')
       setResponseStatus(event, 206)
       setHeader(event, 'Content-Range', `bytes ${start}-${end}/${file.size}`)
-      setHeader(event, 'Content-Length', String(chunk.size))
+      setHeader(event, 'Content-Length', chunk.size)
       return new Uint8Array(await chunk.arrayBuffer())
     }
 
-    setHeader(event, 'Content-Length', String(file.size))
+    setHeader(event, 'Content-Length', file.size)
     return new Uint8Array(await file.arrayBuffer())
   }
 

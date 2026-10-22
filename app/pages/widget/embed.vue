@@ -1,6 +1,10 @@
 <script setup lang="ts">
-import { resolveAttachmentUrl } from '~/utils/attachment'
-import type { WidgetFeedbackItem } from '~~/server/api/widget/feedback/index.get'
+import { resolveAttachmentUrl } from '#layers/feedlog/app/utils/attachment'
+import { widgetEmbedKey } from '#layers/feedlog/app/composables/useWidgetEmbed'
+import { widgetProtocolKey } from '#layers/feedlog/app/composables/useWidgetProtocol'
+import { widgetResumeSchema, type WidgetChatResume } from '#layers/feedlog/app/composables/useWidgetResume'
+import type { WidgetFeedbackItem } from '#layers/feedlog/server/api/widget/feedback/index.get'
+import type { WidgetConversationItem } from '#layers/feedlog/server/api/widget/conversations/index.get'
 
 // /widget/embed — the FeedLog-hosted page the widget SDK loads in its iframe.
 //
@@ -10,16 +14,21 @@ definePageMeta({ layout: false, middleware: [] })
 
 const route = useRoute()
 const { t } = useI18n()
-const { user, status, widgetFetch, loadSession } = useWidgetEmbed()
+
+const embed = useWidgetEmbed()
+const { status, allowGuest, widgetFetch, loadSession } = embed
 const protocol = useWidgetProtocol()
+const widgetLocale = useWidgetLocale(protocol.locale)
+provide(widgetEmbedKey, embed)
+provide(widgetProtocolKey, protocol)
 
 // ---- theme ---------------------------------------------------------------
 // The host picks the theme by query so the very first frame is already correct —
 // a widget that flashes white inside a dark app is the reason this isn't
 // negotiated over postMessage after load.
 const themeParam = computed(() => {
-  const raw = route.query.theme
-  return raw === 'light' || raw === 'dark' ? raw : 'auto'
+  const raw = protocol.theme.value ?? route.query.theme
+  return raw === 'dark' || raw === 'light' ? raw : 'auto'
 })
 const systemDark = ref(false)
 const isDark = computed(() => themeParam.value === 'dark' || (themeParam.value === 'auto' && systemDark.value))
@@ -33,30 +42,22 @@ const isDark = computed(() => themeParam.value === 'dark' || (themeParam.value =
 // cannot break out of the declaration. The endpoint already normalises these to
 // hex, but that check lives behind an HTTP boundary in another module, and this
 // is the one page any origin may frame — too much to stake on a distant regex.
-function applyBrand(brand: { primary: string; primaryForeground: string }) {
-  const root = document.documentElement.style
-  root.setProperty('--primary', brand.primary)
-  root.setProperty('--ring', brand.primary)
-  root.setProperty('--primary-foreground', brand.primaryForeground)
-  // Mixed over --background so the tint tracks the theme.
-  root.setProperty('--secondary', `color-mix(in oklab, ${brand.primary} 10%, var(--background))`)
+function applyBrand(brand: { primary: string, primaryForeground: string }) {
+  const root = document.documentElement
+  root.style.setProperty('--primary', brand.primary)
+  root.style.setProperty('--primary-foreground', brand.primaryForeground)
+  root.style.setProperty('--ring', brand.primary)
 }
 
-const org = ref<{ name: string; logo: string | null }>({ name: '', logo: null })
+const org = ref<{ name: string, logo: string | null }>({ name: '', logo: null })
 const orgInitial = computed(() => org.value.name.trim().charAt(0).toUpperCase() || 'F')
 // Mirrors the prompt's own fallback, so greeting and model name an unnamed
 // workspace the same way.
 const productName = computed(() => org.value.name || t('widget.thisProduct'))
 
-// A plain link, not a `navigate` message: the SDK's handler only builds post
-// URLs, so the board root has no route through it. The visitor arrives signed in
-// once they have opened any post, which is what mints the cookie on this host.
-const boardUrl = computed(() => (import.meta.client ? window.location.origin : '/'))
-
 useHead(() => ({
-  title: 'FeedLog',
-  htmlAttrs: { class: isDark.value ? 'dark' : undefined },
-  meta: [{ name: 'robots', content: 'noindex, nofollow' }],
+  htmlAttrs: { class: `overflow-hidden overscroll-none${isDark.value ? ' dark' : ''}` },
+  bodyAttrs: { class: 'overflow-hidden overscroll-none' },
   script: themeParam.value === 'auto'
     ? [{
         key: 'widget-embed-auto-theme',
@@ -65,178 +66,77 @@ useHead(() => ({
     : [],
 }))
 
-// ---- chat ----------------------------------------------------------------
-interface ChatMessage {
-  role: 'user' | 'assistant'
-  text: string
-  images?: string[]
-  post?: { id: string; slug: string; title: string; board: string | null; status: string }
+// 'conversations' is the root; the other two both return to it.
+const view = ref<'conversations' | 'chat' | 'list'>('chat')
+const conversations = ref<WidgetConversationItem[]>([])
+const activeConversationId = ref<string | null>(null)
+const chatKey = ref(0)
+const savedChat = ref<WidgetChatResume | null>(null)
+const restoredChat = ref<WidgetChatResume | null>(null)
+const widgetRoot = ref<HTMLElement | null>(null)
+let scrollTop = 0
+let authed = false
+
+function rememberScroll(event: Event) {
+  const target = event.target
+  if (target instanceof HTMLElement && target.clientHeight > 0) scrollTop = target.scrollTop
 }
 
-const view = ref<'chat' | 'list'>('chat')
-const messages = ref<ChatMessage[]>([])
-const draft = ref('')
-const sending = ref(false)
-const bodyEl = ref<HTMLElement | null>(null)
-const draftEl = ref<HTMLTextAreaElement | null>(null)
+protocol.onResume(() => ({
+  owner: embed.user.value?.email ?? null,
+  anonymous: !embed.user.value || embed.user.value.isAnonymous === true,
+  view: view.value,
+  conversationId: activeConversationId.value,
+  chat: savedChat.value ? JSON.parse(JSON.stringify(savedChat.value)) : null,
+  scrollTop,
+}), async (state) => {
+  const parsed = widgetResumeSchema.safeParse(state)
+  if (!parsed.success) return
+  const saved = parsed.data
+  // A guest may claim their own draft on login; a different signed-in account
+  // must never inherit the previous account's conversation or composer.
+  if (!saved.anonymous && saved.owner !== embed.user.value?.email) return
+  activeConversationId.value = saved.view === 'chat'
+    ? (saved.chat?.conversationId ?? saved.conversationId)
+    : saved.conversationId
+  restoredChat.value = saved.chat
+  savedChat.value = saved.chat
+  view.value = saved.view
+  await nextTick()
+  await document.fonts.ready
+  const body = widgetRoot.value?.querySelector<HTMLElement>('.overflow-y-auto')
+  if (body && saved.view !== 'chat') body.scrollTop = saved.scrollTop
+})
 
-// min-h-12 is the resting height and nothing else grows the box, so it is
-// measured against its own content on every change. Resetting to auto first is
-// what makes it shrink again: scrollHeight otherwise keeps reporting the taller
-// box it already is. max-h-[120px] caps the growth and hands over to the scrollbar.
-watch(draft, () => {
-  const el = draftEl.value
-  if (!el) return
-  el.style.height = 'auto'
-  el.style.height = `${el.scrollHeight}px`
-}, { flush: 'post' })
-
-// ---- attachments ---------------------------------------------------------
-// Uploaded up front rather than on send: the storage key is what the message
-// endpoint wants, and uploading early lets a failure surface while the visitor
-// is still composing.
-// Mirrors `ensure.maxSize` in server/api/upload.post.ts.
-const IMAGE_MAX_BYTES = 20 * 1024 * 1024
-const VIDEO_MAX_BYTES = 100 * 1024 * 1024
-interface Attachment { key: string; name: string; type?: 'image' | 'video' }
-const attachments = ref<Attachment[]>([])
-const pendingUploads = ref(0)
-const uploading = computed(() => pendingUploads.value > 0)
-const uploadError = ref('')
-const fileInput = ref<HTMLInputElement | null>(null)
-
-function onFilePicked(e: Event) {
-  const input = e.target as HTMLInputElement
-  const files = Array.from(input.files ?? [])
-  input.value = ''
-  void uploadFiles(files)
+function panelVisible() {
+  return document.body.getBoundingClientRect().height > 0
 }
 
-function onPaste(e: ClipboardEvent) {
-  const images = Array.from(e.clipboardData?.files ?? []).filter(f => f.type.startsWith('image/'))
-  if (!images.length) return
-  // A copied file carries its name as text/plain; without this it lands in the draft.
-  e.preventDefault()
-  void uploadFiles(images)
-}
-
-async function uploadFiles(files: File[]) {
-  if (!files.length) return
-  const file = files[0]!
-  uploadError.value = ''
-  pendingUploads.value++
-  {
-    const isImage = file.type === 'image/png' || file.type === 'image/jpeg'
-    const isVideo = file.type === 'video/mp4'
-    if (!isImage && !isVideo) {
-      uploadError.value = t('media.videoHint')
-      pendingUploads.value--
-      return
+function containWheel(event: WheelEvent) {
+  if (event.ctrlKey || !event.deltaY) return
+  // Some browsers ignore overscroll containment when iframe content has no scroll range.
+  for (const node of event.composedPath()) {
+    if (node instanceof HTMLElement) {
+      const { overflowY } = getComputedStyle(node)
+      if ((overflowY === 'auto' || overflowY === 'scroll') && node.scrollHeight > node.clientHeight) return
     }
-    if ((isImage && file.size > IMAGE_MAX_BYTES) || (isVideo && file.size > VIDEO_MAX_BYTES)) {
-      uploadError.value = isImage
-        ? t('widget.uploadTooLarge', { size: 20 })
-        : t('widget.uploadTooLarge', { size: 100 })
-      pendingUploads.value--
-      return
-    }
-    try {
-      const form = new FormData()
-      form.append('file', file)
-      const res = await widgetFetch<{ key: string; type: 'image' | 'video' }>('/api/upload', { method: 'POST', body: form })
-      attachments.value.push({ key: res.key, name: file.name, type: res.type })
-    }
-    catch (err) {
-      // Same 401 contract as send(): park before the SDK rebuilds the frame.
-      if ((err as { statusCode?: number })?.statusCode === 401) {
-        parkForResume(draft.value, attachments.value, messages.value)
-        status.value = 'anonymous'
-        protocol.requestAuth('expired')
-        return
-      }
-      uploadError.value = t('widget.uploadFailed')
-    }
+    if (node === event.currentTarget) break
   }
-  pendingUploads.value--
+  event.preventDefault()
 }
 
-function scrollToBottom() {
-  nextTick(() => { if (bodyEl.value) bodyEl.value.scrollTop = bodyEl.value.scrollHeight })
-}
+const headerTitle = computed(() => {
+  if (view.value === 'conversations') return t('widget.messages')
+  if (view.value === 'list') return t('widget.myFeedback')
+  return t('widget.agentTitle', { product: productName.value })
+})
 
-// An expired session makes the SDK rebuild this frame, wiping everything held in
-// memory. Parking in sessionStorage survives that rebuild — and only that: the
-// archive is read once and dies with the tab, so a plain reload still starts
-// clean rather than becoming the chat persistence the MVP skips.
-const RESUME_KEY = 'feedlog:widget:resume'
-
-function parkForResume(text: string, files: Attachment[], log: ChatMessage[]) {
+async function loadConversations() {
   try {
-    const owner = user.value?.email ?? ''
-    sessionStorage.setItem(RESUME_KEY, JSON.stringify({ owner, text, files, log }))
+    const res = await widgetFetch<{ data: WidgetConversationItem[] }>('/api/widget/conversations')
+    conversations.value = res.data
   }
-  catch { /* storage unavailable — the draft is lost, nothing else breaks */ }
-}
-
-function resumeParked(): boolean {
-  try {
-    const raw = sessionStorage.getItem(RESUME_KEY)
-    if (!raw) return false
-    sessionStorage.removeItem(RESUME_KEY)
-    const saved = JSON.parse(raw) as { owner?: string; text?: string; files?: Attachment[]; log?: ChatMessage[] }
-    // A rebuild that never completed leaves the archive for whoever signs in
-    // next on this tab; a half-sent message goes back only to its author.
-    if (saved.owner !== user.value?.email) return false
-    draft.value = saved.text ?? ''
-    attachments.value = saved.files ?? []
-    if (saved.log?.length) {
-      messages.value = saved.log
-      return true
-    }
-  }
-  catch { /* ignore malformed leftovers */ }
-  return false
-}
-
-async function send() {
-  const text = draft.value.trim()
-  const imageFiles = [...attachments.value]
-  const images = imageFiles.map(a => a.key)
-  if ((!text && !images.length) || sending.value || uploading.value) return
-  messages.value.push({ role: 'user', text, images })
-  draft.value = ''
-  attachments.value = []
-  uploadError.value = ''
-  sending.value = true
-  scrollToBottom()
-  try {
-    const res = await widgetFetch<{ type: string; reply: string; post?: ChatMessage['post'] }>(
-      '/api/widget/messages',
-      { method: 'POST', body: JSON.stringify({ text, images }) },
-    )
-    messages.value.push({ role: 'assistant', text: res.reply, post: res.post })
-    // A new post belongs in the list the moment it exists.
-    if (res.post) void loadFeedback()
-  }
-  catch (e) {
-    // 401 means the SDK must re-exchange; anything else is a plain failure.
-    if ((e as { statusCode?: number })?.statusCode === 401) {
-      // Park before signalling — the SDK rebuilds this frame in response, so
-      // anything written after requestAuth() is lost. The bubble goes first: it
-      // never reached the server, and replaying it would claim otherwise.
-      messages.value.pop()
-      parkForResume(text, imageFiles, messages.value)
-      status.value = 'anonymous'
-      protocol.requestAuth('expired')
-    }
-    else {
-      messages.value.push({ role: 'assistant', text: t('widget.sendFailed') })
-    }
-  }
-  finally {
-    sending.value = false
-    scrollToBottom()
-  }
+  catch { /* leave the list as-is */ }
 }
 
 // ---- feedback list -------------------------------------------------------
@@ -245,27 +145,38 @@ const feedback = ref<WidgetFeedbackItem[]>([])
 const listLoading = ref(false)
 const nextCursor = ref<string | null>(null)
 const totalCount = ref(0)
+const totalKnown = ref(false)
 
-const timeAgo = useTimeAgo()
-const formatDate = useFormatDate()
-function postedAt(d: string | Date): string {
-  return Date.now() - new Date(d).getTime() < 86400000 ? timeAgo(d) : formatDate(d)
-}
-
-// Counted by the server, not by the loaded rows: a reply lands on a post of any
-// age while the list runs newest-first, so an unread item can sit past the page
-// this frame has fetched.
+// Counted by the server, not by the loaded rows: an unread item can sit past the
+// page this frame has fetched. unreadCount is the merged badge (posts +
+// conversations); feedbackUnread is the posts-only number the UI labels.
 const unreadCount = ref(0)
+const feedbackUnread = ref(0)
 
-// The SDK owns the badge; it only learns of changes from here.
-watch(unreadCount, c => protocol.reportUnread(c))
+interface BadgeCounts { count: number, feedback: number }
+
+// The SDK owns the badge; it only learns of it from here.
+function applyBadge(res: BadgeCounts) {
+  unreadCount.value = res.count
+  feedbackUnread.value = res.feedback
+  protocol.reportUnread(res.count)
+}
 
 async function loadUnread() {
   try {
-    const res = await widgetFetch<{ count: number }>('/api/widget/unread')
-    unreadCount.value = res.count
+    applyBadge(await widgetFetch<BadgeCounts>('/api/widget/unread'))
   }
   catch { /* keep the last known count */ }
+}
+
+async function markConversationRead(id: string, lastSeq: number) {
+  try {
+    const result = await widgetFetch<BadgeCounts & { cleared: boolean }>(`/api/widget/conversations/${id}/read`, { method: 'POST', body: JSON.stringify({ observed_last_seq: lastSeq }) })
+    applyBadge(result)
+    const row = conversations.value.find(c => c.id === id)
+    if (row && result.cleared) row.unread = false
+  }
+  catch { /* the dot stays; a later load will correct it */ }
 }
 
 async function loadFeedback(append = false) {
@@ -281,6 +192,7 @@ async function loadFeedback(append = false) {
     feedback.value = append ? [...feedback.value, ...res.data] : res.data
     nextCursor.value = res.pagination.nextCursor
     totalCount.value = res.total
+    totalKnown.value = true
   }
   catch { /* leave the list as-is */ }
   finally {
@@ -296,35 +208,101 @@ function refreshOnVisible() {
   if (view.value === 'list') void loadFeedback()
 }
 
-// Infinite scroll. The observer is rebuilt whenever the sentinel remounts: the
-// list view is torn down every time the visitor goes back to the chat.
-const listSentinel = ref<HTMLElement | null>(null)
-let listObserver: IntersectionObserver | null = null
-
-watch(listSentinel, (el) => {
-  listObserver?.disconnect()
-  listObserver = null
-  if (!el) return
-  listObserver = new IntersectionObserver((entries) => {
-    if (entries.some(e => e.isIntersecting) && nextCursor.value && !listLoading.value) {
-      void loadFeedback(true)
-    }
-  }, { root: bodyEl.value ?? null, rootMargin: '120px' })
-  listObserver.observe(el)
-}, { flush: 'post' })
-
 // Opening an item clears its dot and hands the SDK the slug — the detail page
 // opens as a top-level tab, where cookies work and the full board is available.
 async function openItem(item: WidgetFeedbackItem) {
   protocol.navigateToFeedback(item.slug)
   if (!item.unread) return
   try {
-    const res = await widgetFetch<{ count: number }>(`/api/widget/feedback/${item.id}/read`, { method: 'POST' })
+    const res = await widgetFetch<BadgeCounts>(`/api/widget/feedback/${item.id}/read`, { method: 'POST' })
     item.unread = false
-    unreadCount.value = res.count
+    applyBadge(res)
   }
   catch { /* the dot stays; a later load will correct it */ }
 }
+
+function onAuthRequired() {
+  status.value = 'anonymous'
+  protocol.requestAuth('expired')
+}
+
+function onFiled() {
+  void Promise.all([loadFeedback(), loadUnread(), loadConversations()])
+}
+
+function onOpenFeedback() {
+  view.value = 'list'
+  void loadFeedback()
+}
+
+function onOpenConversation(id: string) {
+  activeConversationId.value = id
+  view.value = 'chat'
+}
+
+function onReplied(id: string, lastSeq: number) {
+  if (view.value !== 'chat') return
+  activeConversationId.value = id
+  if (!panelVisible()) {
+    void loadUnread()
+    return
+  }
+  void markConversationRead(id, lastSeq)
+}
+
+function onNewConversation() {
+  chatKey.value++
+  activeConversationId.value = null
+  view.value = 'chat'
+}
+
+function onBack() {
+  view.value = 'conversations'
+  void loadConversations()
+}
+
+function resetToRoot() {
+  chatKey.value++
+  activeConversationId.value = null
+  view.value = conversations.value.length || totalCount.value ? 'conversations' : 'chat'
+}
+
+async function settleView() {
+  await Promise.all([loadConversations(), loadUnread(), loadFeedback()])
+  resetToRoot()
+}
+
+let panelObserver: ResizeObserver | null = null
+const probeArmed = ref(true)
+
+function watchPanelVisibility() {
+  let shown = true
+  panelObserver = new ResizeObserver(([entry]) => {
+    const now = (entry?.contentRect.height ?? 0) > 0
+    if (now === shown) return
+    shown = now
+    if (shown) void Promise.all([loadConversations(), loadUnread(), loadFeedback()])
+  })
+  panelObserver.observe(document.documentElement)
+}
+
+function onFirstRender() {
+  probeArmed.value = false
+  if (!authed) return
+  watchPanelVisibility()
+  void Promise.all([loadConversations(), loadUnread(), loadFeedback()])
+}
+
+// A guest who just sent their first message now has an identity, so the lists
+// and the badge start applying to them. No settleView: they are mid-conversation
+// and resetting to the root would throw them out of it.
+watch(status, (now, before) => {
+  if (now !== 'authenticated' || before !== 'guest') return
+  authed = true
+  watchPanelVisibility()
+  document.addEventListener('visibilitychange', refreshOnVisible)
+  void loadUnread()
+})
 
 // ---- lifecycle -----------------------------------------------------------
 onMounted(async () => {
@@ -337,21 +315,26 @@ onMounted(async () => {
   // Awaited alongside the session because the greeting names the product. A
   // failure costs only the brand colour and the name.
   const config = $fetch<{
-    org: { name: string; logo: string | null }
-    branding: { primary: string; primaryForeground: string }
+    org: { name: string, logo: string | null }
+    allowGuest: boolean
+    branding: { primary: string, primaryForeground: string }
   }>('/api/widget/config')
     .then((cfg) => {
       applyBrand(cfg.branding)
       org.value = cfg.org
+      allowGuest.value = cfg.allowGuest
     })
     .catch(() => {})
 
-  const [authed] = await Promise.all([loadSession(), config])
+  const [signedIn] = await Promise.all([loadSession(), config, widgetLocale.init()])
+  // Nobody yet, but writing is allowed: open on the composer rather than the
+  // wall. The identity appears on the first send, not here.
+  if (!signedIn && allowGuest.value) status.value = 'guest'
+  authed = signedIn
   if (authed) {
-    if (!resumeParked()) {
-      messages.value.push({ role: 'assistant', text: t('widget.greeting', { product: productName.value }) })
-    }
-    void Promise.all([loadFeedback(), loadUnread()])
+    // Awaited: the SDK hides this frame until ready(), so settling the view
+    // here costs a round trip but never flashes the wrong one.
+    await settleView()
     document.addEventListener('visibilitychange', refreshOnVisible)
   }
 
@@ -362,19 +345,21 @@ onMounted(async () => {
 
 onUnmounted(() => {
   document.removeEventListener('visibilitychange', refreshOnVisible)
-  listObserver?.disconnect()
+  panelObserver?.disconnect()
 })
 </script>
 
 <template>
-  <div class="h-screen flex flex-col bg-background text-foreground">
+  <div ref="widgetRoot" class="relative h-dvh overflow-hidden flex flex-col bg-background text-foreground" @wheel="containWheel" @scroll.capture="rememberScroll">
+    <span v-if="probeArmed" class="render-probe" aria-hidden="true" @animationstart="onFirstRender" />
+
     <!-- Header -->
-    <header class="h-16 px-4 border-b border-border bg-card flex items-center gap-2.5 shrink-0">
+    <header class="min-h-16 px-4 pt-[env(safe-area-inset-top)] border-b border-border bg-card flex items-center gap-2.5 shrink-0">
       <button
-        v-if="view === 'list'"
+        v-if="view !== 'conversations'"
         class="w-7 h-7 shrink-0 hover:opacity-70 transition-opacity flex items-center justify-center text-primary"
         :aria-label="t('widget.back')"
-        @click="view = 'chat'"
+        @click="onBack"
       >
         <Icon name="lucide:arrow-left" size="17" />
       </button>
@@ -388,27 +373,29 @@ onUnmounted(() => {
         v-else-if="view === 'chat'"
         class="w-7 h-7 rounded-md shrink-0 grid place-items-center bg-primary text-primary-foreground font-heading font-bold text-[13px]"
       >{{ orgInitial }}</span>
-      <div class="flex-1 min-w-0">
-        <p class="font-heading font-semibold text-[15.5px] truncate">
-          {{ view === 'list' ? t('widget.myFeedback') : t('widget.title') }}
+      <div class="flex-1 min-w-0" :class="view === 'conversations' ? 'text-center' : ''">
+        <p
+          class="font-heading truncate"
+          :class="view === 'conversations' ? 'text-lg font-bold leading-6' : 'font-semibold text-[15.5px]'"
+        >
+          {{ headerTitle }}
         </p>
         <p v-if="view === 'list' && totalCount" class="mt-0.5 text-xs text-muted-foreground truncate">
-          {{ t('widget.postCount', { count: totalCount }, totalCount) }}<template v-if="unreadCount"> · {{ t('widget.withUpdates', { count: unreadCount }, unreadCount) }}</template>
+          {{ t('widget.postCount', { count: totalCount }, totalCount) }}<template v-if="feedbackUnread"> · {{ t('widget.withUpdates', { count: feedbackUnread }, feedbackUnread) }}</template>
         </p>
-        <p v-else-if="view === 'chat' && org.name" class="mt-0.5 text-xs text-muted-foreground leading-snug line-clamp-2">
-          {{ t('widget.subtitle', { product: org.name }) }}
-        </p>
+
       </div>
       <button
         class="w-6.5 h-6.5 rounded-full bg-secondary hover:opacity-80 transition-opacity flex items-center justify-center text-primary shrink-0"
         :aria-label="t('widget.close')"
+        data-fdl-action="widget_panel_close"
         @click="protocol.requestClose()"
       >
         <Icon name="lucide:x" size="13" />
       </button>
     </header>
 
-    <!-- Signed out -->
+    <!-- Signed out, and this org does not accept guests -->
     <div v-if="status === 'anonymous'" class="flex-1 flex flex-col items-center justify-center gap-3 px-8 text-center">
       <Icon name="lucide:message-circle" size="28" class="text-muted-foreground" />
       <p class="font-heading font-bold text-sm">{{ t('widget.loginTitle') }}</p>
@@ -425,223 +412,66 @@ onUnmounted(() => {
       <Icon name="lucide:loader-2" size="20" class="animate-spin text-muted-foreground" />
     </div>
 
-    <!-- Feedback list -->
-    <div v-else-if="view === 'list'" ref="bodyEl" class="flex-1 overflow-y-auto bg-background">
-      <p v-if="!feedback.length && !listLoading" class="px-5 py-8 text-xs text-muted-foreground text-center">
-        {{ t('widget.noFeedback') }}
-      </p>
-      <ul v-else class="p-3 space-y-2">
-        <li v-for="item in feedback" :key="item.id">
-          <button
-            class="w-full text-left px-3 py-2.5 rounded-md border border-border bg-card hover:border-primary/40 transition-colors group"
-            @click="openItem(item)"
-          >
-            <div class="flex items-start gap-2">
-              <p class="flex-1 text-[13px] font-semibold leading-snug">
-                {{ item.title }}
-                <span v-if="item.unread" class="inline-block align-middle ml-1.5 w-1.75 h-1.75 rounded-full bg-primary" />
-              </p>
-              <WidgetEmbedStatusBadge :status="item.status" class="shrink-0" />
-            </div>
-            <div class="mt-0.5 text-xs text-muted-foreground flex items-center gap-0.5">
-              <Icon name="lucide:chevron-up" size="12" />{{ item.voteCount }}
-              <span class="mx-1">·</span>{{ postedAt(item.createdAt) }}
-            </div>
-            <div class="mt-1.5 flex justify-end">
-              <span class="text-[11.5px] font-semibold text-primary flex items-center gap-0.5">
-                {{ t('widget.viewOnBoard') }}<Icon name="lucide:arrow-up-right" size="11" />
-              </span>
-            </div>
-          </button>
-        </li>
-        <li
-          v-if="nextCursor"
-          ref="listSentinel"
-          class="py-3 grid place-items-center"
-          :aria-label="t('widget.loading')"
-        >
-          <Icon v-if="listLoading" name="lucide:loader-2" size="14" class="animate-spin text-muted-foreground" />
-        </li>
-      </ul>
-    </div>
+    <!-- Chat only: a trip to the list must not wipe the conversation. -->
+    <KeepAlive v-else include="WidgetEmbedChat" :max="1">
+      <WidgetEmbedConversationList
+        v-if="view === 'conversations'"
+        :items="conversations"
+        :org-initial="orgInitial"
+        :total-count="totalCount"
+        :total-known="totalKnown"
+        :unread-count="feedbackUnread"
+        @open="onOpenConversation"
+        @open-feedback="onOpenFeedback"
+        @new-conversation="onNewConversation"
+      />
 
-    <!-- Chat -->
-    <template v-else>
-      <!-- With nothing filed there is nothing to link to, so the whole bar
-           becomes the invitation to go read what others asked for. -->
-      <div
-        class="mx-3.5 mt-3.5 rounded-md border border-border bg-card shadow-warm text-[12.5px] font-semibold flex items-stretch shrink-0 overflow-hidden"
-        :class="totalCount ? '' : 'border-dashed'"
-      >
-        <button
-          v-if="totalCount"
-          class="flex-1 min-w-0 px-3 py-2.5 hover:bg-secondary transition-colors flex items-center gap-1.5"
-          @click="view = 'list'; loadFeedback()"
-        >
-          <Icon name="lucide:clipboard-list" size="14" class="text-muted-foreground shrink-0" />
-          <span class="truncate">{{ t('widget.myFeedback') }}</span>
-          <span class="font-medium text-muted-foreground shrink-0">({{ totalCount }})</span>
-          <span v-if="unreadCount" class="font-bold text-primary shrink-0 truncate">
-            · {{ t('widget.withUpdates', { count: unreadCount }, unreadCount) }}
-          </span>
-        </button>
-        <a
-          :href="boardUrl"
-          target="_blank"
-          rel="noopener noreferrer"
-          class="px-3 py-2.5 font-medium text-muted-foreground hover:bg-secondary hover:text-primary transition-colors flex items-center gap-1.5"
-          :class="totalCount ? 'border-l border-border shrink-0' : 'flex-1'"
-        >
-          <Icon name="lucide:globe" size="14" class="shrink-0" />
-          <span class="truncate">{{ totalCount ? t('widget.allFeedback') : t('widget.seeOthers') }}</span>
-          <Icon name="lucide:arrow-up-right" size="11" class="shrink-0" />
-        </a>
-      </div>
+      <WidgetEmbedFeedbackList
+        v-else-if="view === 'list'"
+        :items="feedback"
+        :loading="listLoading"
+        :has-more="!!nextCursor"
+        @load-more="loadFeedback(true)"
+        @open="openItem"
+      />
 
-      <div ref="bodyEl" class="flex-1 overflow-y-auto bg-background p-3.5 space-y-2.5">
-        <div v-for="(m, i) in messages" :key="i" class="flex" :class="m.role === 'user' ? 'justify-end' : 'justify-start'">
-          <div class="max-w-[82%]">
-            <div
-              class="px-3 py-2.5 rounded-lg text-[13.5px] leading-normal"
-              :class="m.role === 'user'
-                ? 'bg-primary text-primary-foreground rounded-br-sm'
-                : 'bg-card border border-border rounded-bl-sm'"
-            >
-              <WidgetEmbedMessageText v-if="m.text" :text="m.text" />
-              <div v-if="m.images?.length" class="flex flex-wrap gap-1.5" :class="m.text ? 'mt-2' : ''">
-                <img
-                  v-for="k in m.images"
-                  :key="k"
-                  :src="resolveAttachmentUrl(k)!"
-                  alt=""
-                  class="w-16 h-16 rounded-lg object-cover border border-black/10"
-                >
-              </div>
-              <WidgetEmbedFeedbackCard
-                v-if="m.post"
-                :title="m.post.title"
-                :board="m.post.board"
-                :status="m.post.status"
-                @open="protocol.navigateToFeedback(m.post!.slug)"
-              />
-            </div>
-          </div>
-        </div>
+      <WidgetEmbedChat
+        v-else
+        :key="chatKey"
+        :product-name="productName"
+        :open-id="activeConversationId"
+        :resume-state="restoredChat"
+        @state-change="savedChat = $event"
+        @auth-required="onAuthRequired"
+        @filed="onFiled"
+        @replied="onReplied"
+      />
+    </KeepAlive>
 
-        <div v-if="sending" class="flex justify-start">
-          <div class="px-3.5 py-2.5 rounded-lg rounded-bl-sm bg-card border border-border text-xs text-muted-foreground flex items-center gap-1.5">
-            <span class="flex items-center gap-1" aria-hidden="true">
-              <span v-for="n in 3" :key="n" class="w-1 h-1 rounded-full bg-current opacity-40 typing-dot" :style="{ animationDelay: `${(n - 1) * 0.16}s` }" />
-            </span>
-            {{ t('widget.thinking') }}
-          </div>
-        </div>
-      </div>
-
-      <div class="px-3 py-2.5 bg-card shrink-0">
-        <p v-if="uploadError" class="mb-2 flex items-start gap-1.5 text-[11px] text-destructive">
-          <Icon name="lucide:alert-circle" size="13" class="shrink-0 mt-px" />
-          <span class="flex-1">{{ uploadError }}</span>
-          <button
-            class="shrink-0 hover:opacity-70 transition-opacity"
-            :aria-label="t('widget.close')"
-            @click="uploadError = ''"
-          >
-            <Icon name="lucide:x" size="12" />
-          </button>
-        </p>
-
-        <!-- Staged attachments: already uploaded, waiting to ride along with the message. -->
-        <div v-if="attachments.length || uploading" class="flex flex-wrap gap-1.5 mb-2">
-          <div
-            v-for="(a, i) in attachments"
-            :key="a.key"
-            class="relative h-12 w-16 rounded-md overflow-hidden border border-border group"
-          >
-            <video v-if="a.type === 'video' || a.key.endsWith('.mp4')" :src="resolveAttachmentUrl(a.key)!" class="w-full h-full object-cover" muted />
-            <img v-else :src="resolveAttachmentUrl(a.key)!" :alt="a.name" class="w-full h-full object-cover">
-            <button
-              class="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white"
-              :aria-label="t('widget.cancel')"
-              @click="attachments.splice(i, 1)"
-            >
-              <Icon name="lucide:x" size="14" />
-            </button>
-          </div>
-          <div v-if="uploading" class="h-12 w-16 rounded-md border border-border grid place-items-center">
-            <Icon name="lucide:loader-2" size="14" class="animate-spin text-muted-foreground" />
-          </div>
-        </div>
-
-        <!-- Controls sit on their own row so the textarea can grow into the card
-             instead of stretching the buttons beside it. -->
-        <div class="rounded-md border border-border bg-card transition-shadow focus-within:border-primary focus-within:ring-[3px] focus-within:ring-primary/15">
-          <input
-            ref="fileInput"
-            type="file"
-            accept="image/png,image/jpeg,.png,.jpg,.jpeg,video/mp4,.mp4"
-            class="hidden"
-            @change="onFilePicked"
-          >
-          <textarea
-            ref="draftEl"
-            v-model="draft"
-            rows="1"
-            :placeholder="t('widget.placeholder')"
-            class="w-full min-h-12 max-h-[120px] px-3 py-2 bg-transparent text-[13.5px] leading-normal resize-none focus:outline-none no-scrollbar"
-            @keydown.enter.exact.prevent="send"
-            @paste="onPaste"
-          />
-          <div class="flex items-center justify-between px-1.5 py-1">
-            <button
-              :disabled="uploading || sending"
-              class="h-6.5 w-7 rounded-md flex items-center justify-center text-muted-foreground hover:bg-secondary hover:text-primary disabled:opacity-40 disabled:cursor-not-allowed transition-all"
-              :aria-label="t('widget.attachImage')"
-              @click="fileInput?.click()"
-            >
-              <Icon name="lucide:image" size="15" />
-            </button>
-            <button
-              :disabled="(!draft.trim() && !attachments.length) || sending || uploading"
-              class="px-3.5 py-1.5 rounded-md bg-primary text-primary-foreground text-[12.5px] font-heading font-semibold hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
-              @click="send"
-            >
-              {{ t('widget.send') }}
-            </button>
-          </div>
-        </div>
-      </div>
-    </template>
-
-    <p v-if="status !== 'loading'" class="py-1.5 bg-card text-center text-[10.5px] text-muted-foreground shrink-0">
+    <a
+      v-if="status !== 'loading'"
+      href="https://feedlog.ai"
+      target="_blank"
+      rel="noopener"
+      class="block pt-1.5 pb-[max(6px,env(safe-area-inset-bottom))] bg-card text-center text-[10.5px] text-muted-foreground shrink-0 hover:text-foreground transition-colors"
+    >
       {{ t('board.poweredBy') }}FeedLog
-    </p>
+    </a>
   </div>
 </template>
 
 <style scoped>
-/* The composer scrolls past max-h-[120px], but a scrollbar inside a 400px panel
-   is more noise than affordance. */
-.no-scrollbar {
-  scrollbar-width: none;
+.render-probe {
+  position: fixed;
+  width: 1px;
+  height: 1px;
+  pointer-events: none;
+  opacity: 0;
+  animation: render-probe 1ms linear;
 }
 
-.no-scrollbar::-webkit-scrollbar {
-  display: none;
-}
-
-.typing-dot {
-  animation: typing 1.2s ease-in-out infinite;
-}
-
-@keyframes typing {
-  0%, 60%, 100% { opacity: 0.25; }
-  30% { opacity: 1; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .typing-dot {
-    animation: none;
-  }
+@keyframes render-probe {
+  from { opacity: 0; }
+  to { opacity: 0; }
 }
 </style>

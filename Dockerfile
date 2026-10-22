@@ -2,7 +2,7 @@
 # pnpm.supportedArchitectures in package.json ensures all target-arch optional
 # binaries (e.g. sharp for linux-x64 + linux-arm64) are fetched in this single
 # install, so the .output produced in stage 2 is arch-portable.
-FROM --platform=$BUILDPLATFORM node:22-slim AS deps
+FROM --platform=$BUILDPLATFORM node:22.23.4-slim@sha256:de170b39439eb0e5a3444ad7d60b015614a381e10fecae2e30ec9e735122f38d AS deps
 
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
@@ -16,7 +16,7 @@ RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
 
 # Stage 2: Build (runs on BUILDPLATFORM for native speed; produces a
 # multi-arch-portable .output because deps already contain all target archs).
-FROM --platform=$BUILDPLATFORM node:22-slim AS builder
+FROM --platform=$BUILDPLATFORM node:22.23.4-slim@sha256:de170b39439eb0e5a3444ad7d60b015614a381e10fecae2e30ec9e735122f38d AS builder
 
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
@@ -39,7 +39,7 @@ ENV NODE_OPTIONS=--max-old-space-size=4096
 RUN pnpm build
 
 # Stage 3: Production
-FROM node:22-slim AS runner
+FROM node:22.23.4-slim@sha256:de170b39439eb0e5a3444ad7d60b015614a381e10fecae2e30ec9e735122f38d AS runner
 
 WORKDIR /app
 

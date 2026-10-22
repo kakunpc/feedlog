@@ -1,10 +1,8 @@
-import { toast } from 'vue-sonner'
-
 const IMAGE_MAX_BYTES = 20 * 1024 * 1024
 const VIDEO_MAX_BYTES = 100 * 1024 * 1024
 const IMAGE_TYPES = new Set(['image/png', 'image/jpeg'])
 
-export function useUploadImg() {
+export function useUploadImg(beforeUpload?: () => boolean | Promise<boolean>) {
   async function uploadFile(file: File): Promise<{ key: string; type: 'image' | 'video' }> {
     const isImage = IMAGE_TYPES.has(file.type)
     const isVideo = file.type === 'video/mp4'
@@ -22,16 +20,20 @@ export function useUploadImg() {
   }
 
   async function onUploadImg(files: File[], callback: (urls: string[]) => void) {
-    const file = files[0]
-    if (!file) return callback([])
-
-    try {
-      const result = await uploadFile(file)
-      callback(result.type === 'image' ? [`attachment:${result.key}`] : [])
-    } catch (error) {
-      toast.error(uploadErrorMessage(error))
-      callback([])
+    if (!files.length || (beforeUpload && !await beforeUpload())) return
+    const urls: string[] = []
+    let failed = false
+    for (const file of files) {
+      try {
+        const result = await uploadFile(file)
+        if (typeof result.key !== 'string' || !result.key.trim() || result.type === 'video') throw new Error('Invalid image response')
+        urls.push(`attachment:${result.key}`)
+      } catch {
+        failed = true
+      }
     }
+    if (urls.length) callback(urls)
+    if (failed) throw new Error(urls.length ? 'partialUpload' : 'uploadFailed')
   }
 
   return { onUploadImg, uploadFile }

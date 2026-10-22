@@ -48,8 +48,8 @@ async function refresh() {
       authClient.organization.listInvitations({ query: { organizationId: orgId.value } }),
       $fetch<AccessInviteView[]>('/api/admin/access-invites'),
     ])
-    members.value = ((memRes as { data?: { members?: MemberView[] } }).data?.members ?? []) as MemberView[]
-    invitations.value = (((invRes as { data?: InvitationView[] }).data) ?? [])
+    members.value = (memRes.data?.members ?? []).map(m => ({ ...m, createdAt: new Date(m.createdAt).toISOString(), user: { ...m.user, image: m.user.image ?? null } }))
+    invitations.value = (invRes.data ?? []).map(i => ({ ...i, expiresAt: new Date(i.expiresAt).toISOString() }))
       .filter(i => i.status === 'pending')
     accessInvites.value = linkRes
   } finally {
@@ -186,9 +186,6 @@ function formatExpiresIn(iso: string | null): string {
   return `${mins}m`
 }
 
-function initials(name: string | undefined): string {
-  return (name ?? '').slice(0, 2).toUpperCase()
-}
 </script>
 
 <template>
@@ -209,7 +206,7 @@ function initials(name: string | undefined): string {
     </header>
 
     <div class="flex-1 overflow-y-auto">
-      <div class="max-w-4xl mx-auto px-6 py-8 space-y-8">
+      <div class="max-w-4xl mx-auto px-4 sm:px-6 py-8 space-y-8">
         <template v-if="loading">
           <p class="text-sm text-muted-foreground">{{ $t('settings.loading') }}</p>
         </template>
@@ -278,16 +275,7 @@ function initials(name: string | undefined): string {
             </div>
             <ul class="divide-y divide-border">
               <li v-for="m in members" :key="m.id" class="px-5 py-3 flex items-center gap-3">
-                <div class="w-9 h-9 rounded-full overflow-hidden bg-muted shrink-0 flex items-center justify-center">
-                  <img
-                    v-if="m.user.image"
-                    :src="m.user.image"
-                    :alt="m.user.name"
-                    class="w-full h-full object-cover"
-                    referrerpolicy="no-referrer"
-                  >
-                  <span v-else class="text-foreground text-xs font-bold">{{ initials(m.user.name) }}</span>
-                </div>
+                <UserAvatar :author="{ id: m.userId, name: m.user.name, image: m.user.image }" :size="9" />
                 <div class="flex-1 min-w-0">
                   <div class="flex items-center gap-2">
                     <p class="text-sm font-bold truncate">{{ m.user.name }}</p>

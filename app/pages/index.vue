@@ -6,19 +6,21 @@ const hasWelcome = computed(() => branding.value.welcomeTitle || branding.value.
 
 // Auth & login modal
 const { data: session } = useAuthSession()
-const isLoggedIn = computed(() => !!session.value?.user)
 const isSsoSession = computed(
   () => !!(session.value as { session?: { ssoOrgId?: string | null } } | null)?.session?.ssoOrgId,
 )
 const orgCtx = useOrgContext()
 const canEditPortal = computed(() => !!session.value?.user && !!orgCtx.value.role && !isSsoSession.value)
 const loginModal = useLoginModal()
+const { mayAct, ensureIdentity } = useGuestSession()
 const timeAgo = useTimeAgo()
 
 // Board store
 const boardStore = useBoardStore()
-await callOnce(() => boardStore.fetchBoards())
-const { boards, boardMap, totalPostCount } = storeToRefs(boardStore)
+// Portal counts belong to this view; dialogs and other pages use unfiltered metadata.
+const boards = ref<BoardItem[]>([])
+const totalPostCount = ref(0)
+const boardMap = computed(() => new Map(boards.value.map(board => [board.id, board.name])))
 
 // Currently selected board and sort order
 const route = useRoute()
@@ -37,7 +39,40 @@ const activeBoardId = computed(() => {
   return boards.value.find(b => b.name.toLowerCase() === wanted)?.id ?? null
 })
 const sortBy = ref<'top' | 'recent'>('recent')
-const includeClosed = ref(false)
+
+// `?s=` mirrors `?b=`: the default view carries no param, so a bare board URL is
+// the default and every other selection is a shareable link. Unrecognised values
+// fall back to the default rather than emptying the board.
+const STATUS_FILTERS = new Set<string>(['active', 'all', ...POST_STATUSES])
+const statusFilter = computed<BoardStatusFilter>(() => {
+  const raw = (route.query.s as string) || ''
+  return STATUS_FILTERS.has(raw) ? raw as BoardStatusFilter : 'active'
+})
+// null = no status condition at all ("all").
+const statusList = computed(() => statusFilterToStatuses(statusFilter.value))
+
+function selectStatus(value: BoardStatusFilter) {
+  const query = { ...route.query }
+  if (value === 'active') delete query.s
+  else query.s = value
+  router.push({ query })
+}
+
+let countSequence = 0
+async function refreshBoardCounts() {
+  const current = ++countSequence
+  const result = await useApiFetch<{ data: BoardItem[]; totalPostCount: number }>('/api/boards', {
+    query: { status: statusList.value?.join(',') || undefined },
+  })
+  if (current !== countSequence) return
+  boards.value = result.data
+  totalPostCount.value = result.totalPostCount
+}
+
+await Promise.all([
+  callOnce(() => boardStore.fetchBoards()),
+  refreshBoardCounts(),
+])
 
 // Post list
 const sort = computed(() => sortBy.value === 'top' ? 'votes' : 'createdAt')
@@ -54,10 +89,10 @@ async function fetchPosts(cursor?: string) {
   const data = await useApiFetch<CursorPaginatedList<PostListItem>>('/api/posts', {
     query: {
       boardId: activeBoardId.value || undefined,
+      status: statusList.value?.join(',') || undefined,
       sort: sort.value,
       pageSize: 10,
       cursor,
-      includeClosed: includeClosed.value || undefined,
     },
   })
   return data
@@ -74,82 +109,59 @@ const searchActive = computed(() => searchQuery.value.trim().length > 0)
 const searchToolbar = ref<{ reset: () => void } | null>(null)
 let boardSwitchClearing = false
 
-// Reset list when filters change
-watch(activeBoardId, async () => {
-  if (searchActive.value) return
-  startLoading()
-  fetchingPosts.value = true
-  try {
-    const data = await fetchPosts()
-    posts.value = data.data
-    nextCursor.value = data.pagination.nextCursor
-  } finally {
-    finishLoading()
-    fetchingPosts.value = false
-  }
-})
-
-watch(sort, async () => {
-  if (searchActive.value) return
-  fetchingPosts.value = true
-  try {
-    const data = await fetchPosts()
-    posts.value = data.data
-    nextCursor.value = data.pagination.nextCursor
-  } finally {
-    fetchingPosts.value = false
-  }
-})
-
-watch(includeClosed, async () => {
-  if (searchActive.value) {
-    const q = searchQuery.value.trim()
-    searching.value = true
-    try {
-      const res = await useApiFetch<{ data: PostListItem[] }>('/api/posts/search', {
-        query: { q, includeClosed: includeClosed.value || undefined },
-      })
-      posts.value = res.data
-      nextCursor.value = null
-    } finally {
-      searching.value = false
-    }
-    return
-  }
-  fetchingPosts.value = true
-  try { await refreshPosts() } finally { fetchingPosts.value = false }
-})
-
+let postSequence = 0
 async function refreshPosts() {
-  const data = await fetchPosts()
-  posts.value = data.data
-  nextCursor.value = data.pagination.nextCursor
+  const current = ++postSequence
+  const q = searchQuery.value.trim()
+  searching.value = !!q
+  fetchingPosts.value = !q
+  startLoading()
+  try {
+    const result: { data: PostListItem[]; pagination?: { nextCursor: string | null } } = q
+      ? await useApiFetch<{ data: PostListItem[] }>('/api/posts/search', {
+          query: { q, status: statusList.value?.join(',') || undefined },
+        })
+      : await fetchPosts()
+    if (current !== postSequence) return
+    posts.value = result.data
+    nextCursor.value = result.pagination?.nextCursor ?? null
+  } finally {
+    if (current === postSequence) {
+      searching.value = false
+      fetchingPosts.value = false
+      finishLoading()
+    }
+  }
 }
 
+watch(activeBoardId, () => refreshPosts())
+watch(statusFilter, async () => {
+  await Promise.all([refreshBoardCounts(), refreshPosts()])
+})
+watch(sort, async () => {
+  if (!searchActive.value) await refreshPosts()
+})
 watch(searchQuery, async () => {
-  const q = searchQuery.value.trim()
-  if (!q) {
-    if (boardSwitchClearing) { boardSwitchClearing = false; return }
-    await refreshPosts()
+  if (!searchActive.value && boardSwitchClearing) {
+    boardSwitchClearing = false
     return
   }
-  searching.value = true
-  try {
-    const res = await useApiFetch<{ data: PostListItem[] }>('/api/posts/search', {
-      query: { q, includeClosed: includeClosed.value || undefined },
-    })
-    posts.value = res.data
-    nextCursor.value = null // search returns a flat capped set — no "load more"
-  } finally {
-    searching.value = false
-  }
+  await refreshPosts()
+})
+
+onBeforeUnmount(() => {
+  postSequence++
+  countSequence++
+  finishLoading()
 })
 
 async function loadMore() {
-  if (!nextCursor.value || loadingMore.value) return
+  if (!nextCursor.value || loadingMore.value || fetchingPosts.value || searchActive.value) return
+  const current = postSequence
   loadingMore.value = true
   try {
     const data = await fetchPosts(nextCursor.value)
+    if (current !== postSequence) return
     posts.value.push(...data.data)
     nextCursor.value = data.pagination.nextCursor
   } finally {
@@ -166,17 +178,16 @@ async function selectBoard(boardId: string | null) {
     boardSwitchClearing = true
     searchQuery.value = ''
   }
-  router.push({ query: boardId ? { b: boardId } : {} })
+  const query = { ...route.query }
+  if (boardId) query.b = boardId
+  else delete query.b
+  await router.push({ query })
   if (wasCommitted && sameBoard) await refreshPosts()
 }
 
 // Status configuration (centralized)
 
 
-// User initials
-function initials(name: string | null) {
-  return (name || '?').slice(0, 2).toUpperCase()
-}
 
 // Post detail store
 const postDetailStore = usePostDetailStore()
@@ -185,6 +196,14 @@ const postDetailStore = usePostDetailStore()
 const showDetail = ref(false)
 const showSubmit = ref(false)
 const detailSlug = ref<string | null>(null)
+
+// The composer opens before any identity exists; a guest is only minted when the
+// draft is actually submitted.
+const canOpenSubmit = computed(() => mayAct('allowPost'))
+function openSubmit() {
+  if (!canOpenSubmit.value) return loginModal.open()
+  showSubmit.value = true
+}
 
 // Pre-filled submit links: /?new=1&title=...&body=...&b=...
 // This is the one entry point that opens the form to signed-out visitors — they
@@ -226,10 +245,10 @@ function onPostUpdated(updated: { id: string; status?: string; boardId?: string 
   const idx = posts.value.findIndex(p => p.id === updated.id)
   if (idx === -1) return
 
-  // Board changed → the sidebar's per-board counts (served from the board store)
-  // are now stale. Compare against the pre-update boardId, then refresh the store.
-  if (updated.boardId !== undefined && updated.boardId !== posts.value[idx].boardId) {
-    void boardStore.fetchBoards()
+  const previous = posts.value[idx]!
+  if ((updated.boardId !== undefined && updated.boardId !== previous.boardId)
+    || (updated.status !== undefined && updated.status !== previous.status)) {
+    void Promise.all([refreshBoardCounts(), boardStore.fetchBoards()])
   }
 
   // If status or board changed and no longer matches current filter, remove
@@ -237,9 +256,13 @@ function onPostUpdated(updated: { id: string; status?: string; boardId?: string 
     posts.value.splice(idx, 1)
     return
   }
-  if (updated.status && !includeClosed.value && ['done', 'cancelled'].includes(updated.status)) {
-    posts.value.splice(idx, 1)
-    return
+
+  // Status moved out of the current filter → drop it, same as a board change does.
+  if (updated.status !== undefined && statusList.value) {
+    if (!statusList.value.includes(updated.status as PostStatus)) {
+      posts.value.splice(idx, 1)
+      return
+    }
   }
 
   // Update fields in place
@@ -249,13 +272,17 @@ function onPostUpdated(updated: { id: string; status?: string; boardId?: string 
 function onPostDeleted(postId: string) {
   const idx = posts.value.findIndex(p => p.id === postId)
   if (idx !== -1) posts.value.splice(idx, 1)
-  // A deleted post drops its board's count (and the total) → refresh the store.
-  void boardStore.fetchBoards()
+  // Refresh both the filtered portal counts and unfiltered metadata consumers.
+  void Promise.all([refreshBoardCounts(), boardStore.fetchBoards()])
+}
+
+async function onPostCreated() {
+  await Promise.all([refreshPosts(), refreshBoardCounts()])
 }
 
 // Vote / unvote on list items
 async function handleVote(post: PostListItem) {
-  if (!isLoggedIn.value) return loginModal.open()
+  if (!await ensureIdentity('allowVote')) return
   const wasVoted = post.hasVoted
   post.hasVoted = !wasVoted
   post.voteCount += wasVoted ? -1 : 1
@@ -387,8 +414,9 @@ async function handleVote(post: PostListItem) {
       ref="searchToolbar"
       v-model="searchQuery"
       v-model:sort="sortBy"
-      v-model:include-closed="includeClosed"
-      @new-request="isLoggedIn ? (showSubmit = true) : loginModal.open()"
+      :status="statusFilter"
+      @update:status="selectStatus"
+      @new-request="openSubmit()"
     />
 
     <!-- Post list with loading state -->
@@ -403,11 +431,20 @@ async function handleVote(post: PostListItem) {
         <p class="fl-empty__hint">{{ $t('board.noMatchesHint') }}</p>
         <Button
           class="h-10 px-4 rounded-lg text-[15px] font-heading font-semibold"
-          @click="isLoggedIn ? showSubmit = true : loginModal.open()"
+          data-fdl-action="feedback_composer_open"
+          data-fdl-source="empty-state"
+          @click="openSubmit()"
         >
           <Icon name="lucide:plus" size="18" />
           {{ $t('board.newRequest') }}
         </Button>
+      </template>
+      <template v-else-if="statusFilter !== 'all'">
+        <Icon name="lucide:filter-x" size="48" class="mb-4 opacity-50" />
+        <p class="text-lg font-medium">{{ $t('board.noFeedbackFiltered') }}</p>
+        <button class="fl-empty__link" @click="selectStatus('all')">
+          {{ $t('board.showAllStatuses') }}
+        </button>
       </template>
       <template v-else>
         <Icon name="lucide:inbox" size="48" class="mb-4 opacity-50" />
@@ -421,6 +458,8 @@ async function handleVote(post: PostListItem) {
         v-for="p in posts"
         :key="p.id"
         class="feedback-card flex items-stretch gap-4 bg-card border border-border rounded-lg p-4 cursor-pointer"
+        data-fdl-action="feedback_open"
+        data-fdl-source="board-list"
         @click="openPostDetail(p)"
       >
         <!-- Upvote button -->
@@ -429,6 +468,8 @@ async function handleVote(post: PostListItem) {
           :class="p.hasVoted
             ? 'bg-primary text-primary-foreground border-primary shadow-sm'
             : 'bg-background text-foreground border-border hover:border-primary hover:text-primary transition-colors'"
+          data-fdl-action="feedback_vote"
+          data-fdl-source="board-list"
           @click.stop="handleVote(p)"
         >
           <Icon name="lucide:chevron-up" size="24" />
@@ -466,7 +507,7 @@ async function handleVote(post: PostListItem) {
           </div>
 
           <!-- Excerpt -->
-          <p class="text-sm text-muted-foreground line-clamp-2 break-all">
+          <p class="text-sm text-muted-foreground line-clamp-2 break-words">
             {{ p.excerpt }}
           </p>
 
@@ -477,10 +518,7 @@ async function handleVote(post: PostListItem) {
               <span>{{ $t('board.comments', { n: p.commentCount }) }}</span>
             </div>
             <div class="flex items-center gap-2">
-              <img v-if="p.author?.image" :src="p.author.image" :alt="p.author.name" class="w-5 h-5 rounded-full object-cover shrink-0" referrerpolicy="no-referrer">
-              <div v-else class="w-5 h-5 rounded-full bg-foreground/10 flex items-center justify-center text-foreground font-bold text-[9px] shrink-0">
-                {{ initials(p.author?.name) }}
-              </div>
+              <UserAvatar :author="p.author" :size="5" />
               <div class="flex items-center gap-1.5">
                 <Icon name="lucide:clock" size="14" />
                 <span>{{ timeAgo(p.createdAt) }}</span>
@@ -513,7 +551,7 @@ async function handleVote(post: PostListItem) {
     v-model:open="showSubmit"
     :default-board-id="activeBoardId ?? undefined"
     :prefill="submitPrefill"
-    @created="refreshPosts()"
+    @created="onPostCreated"
   />
 </template>
 
@@ -532,6 +570,15 @@ async function handleVote(post: PostListItem) {
 
 nav::-webkit-scrollbar {
   display: none;
+}
+
+.fl-empty__link {
+  font-size: 14px;
+  margin-top: 8px;
+  font-weight: 500;
+  color: var(--primary);
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 .fl-empty__hint {

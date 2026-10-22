@@ -1,5 +1,7 @@
 # Configuration reference
 
+MCP is enabled by default; set `MCP_ENABLED=false` to disable it. The server uses the current external origin unless `BETTER_AUTH_URL` is configured. See [MCP](./mcp.md) for connection, organization access, and migration instructions.
+
 Complete list of environment variables FeedLog reads. For deploy-specific
 guidance, see the [Cloudflare Workers](./deploy/cloudflare-workers.md),
 [Vercel](./deploy/vercel.md), and [Docker](./deploy/docker.md) guides.
@@ -232,7 +234,7 @@ use Nuxt public runtime env naming.
 
 ## AI features
 
-Similar-idea detection and AI-drafted changelog entries both call an
+The Widget Agent, similar-idea detection, and AI-drafted changelog entries call an
 OpenAI-compatible HTTP API. Leave these unset to disable AI features
 entirely — the rest of the app works without them.
 
@@ -251,9 +253,22 @@ Base URL of the OpenAI-compatible endpoint. Examples:
 
 ### `OPENAI_TEXT_MODEL` &nbsp;⬜ optional
 
-Chat model used for AI changelog drafting. Defaults to a current OpenAI
-model; set explicitly when targeting Azure deployments or non-OpenAI
-providers where the model id differs.
+Model used for Widget Agent conversations and AI changelog drafting.
+The Widget Agent requires an explicit model name and API key; without either,
+sending a message returns HTTP 503. Choose an OpenAI-compatible chat model
+with tool calling and, for image attachments, image input support.
+
+Articles with AI Usage enabled are available to the agent independently of
+publication and collection visibility. Customer-facing article references require
+a published article in a visible collection and the public Help Center enabled.
+
+The Widget SDK declares host-page context support through `init` with
+`capabilities.pageContext: true`. Without this capability, the Widget skips
+page-detail collection immediately. The verified parent origin from the init handshake
+is still attached when available. Supported hosts have a 500 ms response timeout;
+missing page details do not prevent sending a message. Context stores the HTTP(S)
+origin and pathname, never query parameters or fragments, so reply emails can link
+back to the host product page.
 
 ---
 
@@ -291,6 +306,9 @@ The domain must be verified with your email provider.
 
 ### Cloudflare Workers
 
+- Inbox requires the `feedlog-inbox` Queue: create it with
+  `pnpm exec wrangler queues create feedlog-inbox` before deploying. The producer,
+  consumer and daily recovery cron are configured in `wrangler.toml`.
 - `DATABASE_URL` is **replaced** by the `POSTGRES` Hyperdrive binding —
   see [`wrangler.toml`](../wrangler.toml) and the [Workers deploy guide](./deploy/cloudflare-workers.md).
 - `S3_*` doesn't apply — blob storage uses the `BLOB` R2 binding.
@@ -304,6 +322,8 @@ The domain must be verified with your email provider.
 
 ### Vercel
 
+- Inbox requires Vercel Queues for delayed tasks. The build configures the
+  `feedlog-inbox` topic trigger; `vercel.json` schedules daily recovery.
 - All env vars set via the dashboard or `vercel env add`.
 - Make sure `DATABASE_URL` is enabled for both **Production** and
   **Preview** scopes, otherwise the build container can't run migrations.
@@ -311,6 +331,8 @@ The domain must be verified with your email provider.
 
 ### Docker / bare Node
 
+- Inbox restores persisted task timers on startup and runs recovery every five
+  minutes. No external queue service or host crontab is required.
 - All env vars set via `-e` on `docker run`, `environment:` in
   docker-compose, or your orchestrator's secret store. All values are
   read at runtime — no rebuild needed when rotating credentials.

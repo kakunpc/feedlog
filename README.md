@@ -169,6 +169,7 @@ overrides, and authentication toggles.
 - **Authentication** — Email / password, Google OAuth, GitHub OAuth, Discord OAuth, admin role handling — powered by [better-auth](https://www.better-auth.com).
 - **Comments & discussions** — Markdown-powered threads on every post.
 - **Notifications** — Authors and upvoters are subscribed automatically and emailed when a post's status changes or the team replies officially; unsubscribe per post at any time. Admins aren't notified. Requires an email provider.
+- **Inbox** — Manage Widget conversations, human handoffs and reply email notifications.
 
 ## Tech Stack
 
@@ -182,7 +183,7 @@ overrides, and authentication toggles.
 | Blob storage | Cloudflare R2 binding, Vercel Blob, or S3-compatible via `aws4fetch` (AWS, MinIO, OSS) |
 | State | Pinia |
 | UI | Tailwind CSS v4, shadcn-vue (new-york), Lucide icons |
-| Editor | md-editor-v3 |
+| Editor | Tiptap 3 (visual) + CodeMirror 6 (Markdown source) |
 | Deploy targets | Cloudflare Workers, Vercel, Node.js Docker |
 | Package manager | pnpm |
 

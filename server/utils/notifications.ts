@@ -1,10 +1,11 @@
-import { and, eq, inArray, ne, sql } from 'drizzle-orm'
+import { eq, sql } from 'drizzle-orm'
 import { useDB } from './db'
 import { sendNotification } from './notification-send'
 import { markPostUnreadForAuthor } from './widget-unread'
 import { resolveCommentEvents } from '../../shared/utils/notifications'
 import { resolveBranding } from '../../shared/utils/branding'
-import { member, organization, user } from '../db/schemas'
+import { organization, user } from '../db/schemas'
+import { findStaffFeedbackRecipients } from '../services/member-preferences'
 import type { NotificationPayload } from '../db/schemas'
 
 // DB-touching notification emit. Pure who/whether decisions live in
@@ -59,6 +60,10 @@ export async function resolvePostThreadRecipients(orgId: string, postId: string,
     WHERE ps.post_id IN (SELECT id FROM family)
       AND ps.user_id <> ${actorId}
       AND u.email IS NOT NULL
+      -- A guest's address is a reserved-domain placeholder; mailing it would only
+      -- generate bounces. They still get the widget's unread dot, and once they
+      -- claim the content onto a real account the mail starts flowing.
+      AND u.is_anonymous IS NOT TRUE
       ${excludeVoters}
       AND NOT EXISTS (
         SELECT 1 FROM member m
@@ -144,16 +149,7 @@ export interface AdminEmitInput {
 }
 
 export async function resolveOrgAdminRecipients(orgId: string, actorId: string) {
-  const db = useDB()
-  return await db
-    .select({ userId: member.userId, email: user.email })
-    .from(member)
-    .innerJoin(user, eq(user.id, member.userId))
-    .where(and(
-      eq(member.organizationId, orgId),
-      inArray(member.role, ['owner', 'manager']),
-      ne(member.userId, actorId),
-    ))
+  return findStaffFeedbackRecipients(useDB(), orgId, actorId)
 }
 
 export async function emitAdminNotification(input: AdminEmitInput): Promise<void> {

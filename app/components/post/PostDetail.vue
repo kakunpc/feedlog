@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import '~/assets/css/md-editor-preview.css'
 import { toast } from 'vue-sonner'
-import { sanitizeAttachmentHtml } from '~/utils/attachment';
+const localePath = useLocalePath()
 
 // Event types for post mutations
 export interface PostUpdatedEvent {
@@ -25,6 +25,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   updated: [post: PostUpdatedEvent]
   deleted: [postId: string]
+  sourceConversation: [conversationId: string]
 }>()
 
 const { onUploadImg } = useUploadImg()
@@ -45,8 +46,14 @@ const commentSort = ref<'newest' | 'oldest' | 'top'>('newest')
 
 // Auth & login modal
 const { data: session } = useAuthSession()
-const isLoggedIn = computed(() => !!session.value?.user)
 const loginModal = useLoginModal()
+const { hasAccount, mayAct, ensureIdentity } = useGuestSession()
+// The comment box is offered before an identity exists: a guest is only minted
+// once they actually press submit. Whoever filed the report always keeps the box,
+// switch or no switch — following up on your own feedback is part of filing it,
+// which is the same exception the server makes.
+const isPostAuthor = computed(() => !!session.value?.user?.id && post.value?.author?.id === session.value.user.id)
+const canOpenCommentBox = computed(() => isPostAuthor.value || mayAct('allowComment'))
 
 // Permissions
 const postAuthorId = computed(() => post.value?.author?.id)
@@ -67,7 +74,8 @@ watch(isOrgManager, async (allowed) => {
 }, { immediate: true })
 
 
-function initials(name: string | null) {
+const { authorName } = useAuthorDisplay()
+function initials(name?: string | null) {
   return (name || '?').slice(0, 2).toUpperCase()
 }
 
@@ -139,7 +147,9 @@ async function handleDeletePost() {
     await store.deletePost(props.slug)
     emit('deleted', postId)
   } catch (e: any) {
-    editError.value = e.data?.message || t('post.detail.errors.deleteFailed')
+    // Not editError: that line only renders inside the edit form, so a delete
+    // failure there was indistinguishable from the button doing nothing.
+    toast.error(e.data?.message || t('post.detail.errors.deleteFailed'))
   } finally {
     deleting.value = false
   }
@@ -213,10 +223,10 @@ async function handleSimilarMerge(direction: 'bring' | 'push', targetPost: any) 
 }
 
 // ---- Vote handler ----
-function handleVote() {
+async function handleVote() {
   if (!post.value) return
   if (isMerged.value) return // Block voting on merged posts
-  if (!isLoggedIn.value) return loginModal.open()
+  if (!await ensureIdentity('allowVote')) return
   const p = post.value
   const settled = p.hasVoted ? store.unvote(props.slug) : store.vote(props.slug)
   const syncList = () => emit('updated', { id: p.id, slug: p.slug, voteCount: p.voteCount, hasVoted: p.hasVoted })
@@ -238,6 +248,7 @@ function emitCommentCount() {
 
 // Comment handlers
 async function handleCommentSubmit(content: string, notify: boolean) {
+  if (!isPostAuthor.value && !await ensureIdentity('allowComment')) return
   commentSubmitting.value = true
   try {
     await store.addComment(props.slug, content, { notify })
@@ -250,6 +261,7 @@ async function handleCommentSubmit(content: string, notify: boolean) {
 
 async function handleReplySubmit(content: string) {
   if (!replyingTo.value) return
+  if (!isPostAuthor.value && !await ensureIdentity('allowComment')) return
   commentSubmitting.value = true
   try {
     const { parentId, commentId } = replyingTo.value
@@ -263,7 +275,7 @@ async function handleReplySubmit(content: string) {
 }
 
 function handleReply(commentId: string) {
-  if (!isLoggedIn.value) return loginModal.open()
+  if (!canOpenCommentBox.value) return loginModal.open()
 
   editingCommentId.value = null
   editing.value = false
@@ -279,8 +291,8 @@ function handleReply(commentId: string) {
   }
 }
 
-function handleLike(commentId: string) {
-  if (!isLoggedIn.value) return loginModal.open()
+async function handleLike(commentId: string) {
+  if (!await ensureIdentity('allowVote')) return
 
   const c = comments.value.find(item => item.id === commentId)
     || comments.value.flatMap(item => item.children ?? []).find(ch => ch.id === commentId)
@@ -313,7 +325,14 @@ function handleEditCommentCancel() {
 }
 
 async function handleDeleteComment(commentId: string) {
-  await store.deleteComment(props.slug, commentId)
+  try {
+    await store.deleteComment(props.slug, commentId)
+  }
+  catch (e: any) {
+    // Uncaught, this rejected into nowhere and the comment silently stayed put.
+    toast.error(e.data?.message || t('post.detail.errors.deleteFailed'))
+    return
+  }
   emitCommentCount()
 }
 
@@ -373,6 +392,8 @@ async function handleShare() {
               :class="post.hasVoted
                 ? 'bg-primary text-primary-foreground border-primary'
                 : 'bg-background text-foreground border-border hover:border-primary hover:text-primary'"
+              data-fdl-action="feedback_vote"
+              data-fdl-source="detail"
               @click="handleVote"
             >
               <Icon name="lucide:chevron-up" size="28" />
@@ -385,7 +406,7 @@ async function handleShare() {
               <div class="space-y-4">
                 <Input v-model="editTitle" class="h-10 text-lg font-heading font-bold" :placeholder="$t('post.detail.titlePlaceholder')" :maxlength="200" />
                 <div class="editor-preview-styled">
-                  <ThemedMdEditor v-model="editContent" language="en-US" :placeholder="$t('post.detail.editPlaceholder')" :preview="false" :max-length="10000" :toolbars="['bold', 'italic', 'strikeThrough', '-', 'title', 'unorderedList', 'orderedList', '-', 'link', 'image', 'code', 'codeRow', '-', 'previewOnly']" :sanitize="sanitizeAttachmentHtml" :style="{ height: '280px' }" @on-upload-img="onUploadImg" />
+                  <ThemedMdEditor v-model="editContent" language="en-US" :placeholder="$t('post.detail.editPlaceholder')" :preview="false" :max-length="10000" :toolbars="['bold', 'italic', 'strikeThrough', '-', 'title', 'unorderedList', 'orderedList', '-', 'link', 'image', 'code', 'codeRow', 'table', '-', 'previewOnly']" :style="{ height: '280px' }" @on-upload-img="onUploadImg" />
                   <div class="mt-2"><MediaUploadButton v-model:content="editContent" /></div>
                 </div>
                 <p v-if="editError" class="text-sm text-destructive">{{ editError }}</p>
@@ -447,7 +468,7 @@ async function handleShare() {
         <!-- Merge banner (inside discussion, per PRD) -->
         <MergeBanner v-if="isMerged && post.canonicalPost" :canonical-post="post.canonicalPost" />
         <ClientOnly v-if="!isMerged">
-          <CommentEditor v-if="isLoggedIn" ref="commentEditorRef" :loading="commentSubmitting" :can-notify="isOrgManager" @submit="handleCommentSubmit" />
+          <CommentEditor v-if="canOpenCommentBox" ref="commentEditorRef" :loading="commentSubmitting" :can-notify="isOrgManager" @submit="handleCommentSubmit" />
           <CommentLoginPrompt v-else />
         </ClientOnly>
         <div v-if="commentLoading && comments.length === 0" class="space-y-4 pt-2">
@@ -554,16 +575,26 @@ async function handleShare() {
         <div>
           <h4 class="font-heading text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-3">{{ $t('post.detail.author') }}</h4>
           <div class="flex items-center gap-3">
-            <img v-if="post.author?.image" :src="post.author.image" :alt="post.author.name" class="w-8 h-8 rounded-full object-cover shrink-0" referrerpolicy="no-referrer">
-            <div v-else class="w-8 h-8 rounded-full bg-foreground/10 flex items-center justify-center text-foreground font-bold text-xs shrink-0">{{ initials(post.author?.name) }}</div>
+            <UserAvatar :author="post.author" :size="8" />
             <div class="flex-1 min-w-0">
-              <p class="text-sm font-bold truncate">{{ post.author?.name ?? $t('common.anonymous') }}</p>
-              <!-- No role check here on purpose: the API only ships email to staff. -->
+              <p class="text-sm font-bold truncate">{{ authorName(post.author) }}</p>
             </div>
           </div>
         </div>
+        <div v-if="post.sourceConversationId" data-source-conversation>
+          <h4 class="font-heading text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-3">{{ $t('inbox.sourceConversation') }}</h4>
+          <NuxtLink
+            :to="localePath(`/dashboard/inbox?conversationId=${post.sourceConversationId}`)"
+            :title="post.sourceConversationTitle || $t('inbox.sourceConversation')"
+            class="flex min-w-0 items-center gap-2.5 rounded-sm text-sm font-semibold text-primary underline underline-offset-4 transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            @click="emit('sourceConversation', post.sourceConversationId)"
+          >
+            <Icon name="lucide:message-square" size="16" class="shrink-0" />
+            <span class="min-w-0 truncate">{{ post.sourceConversationTitle || $t('inbox.sourceConversation') }}</span>
+          </NuxtLink>
+        </div>
         <!-- Admins never receive post-thread email, so the card would lie to them. -->
-        <PostSubscribeCard v-if="post.id && isLoggedIn && !isOrgManager && !isMerged" :post-id="post.id" :subscribed="post.subscribed ?? false" @update:subscribed="post.subscribed = $event" />
+        <PostSubscribeCard v-if="post.id && hasAccount && !isOrgManager && !isMerged" :post-id="post.id" :subscribed="post.subscribed ?? false" @update:subscribed="post.subscribed = $event" />
         <div class="pt-2 flex flex-col gap-2">
           <Button variant="outline" class="text-primary" :disabled="isMerged" :class="isMerged ? 'opacity-50 cursor-not-allowed' : ''" @click="handleShare"><Icon name="lucide:share-2" size="18" /> {{ $t('post.detail.shareRequest') }}</Button>
         </div>
